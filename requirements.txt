@@ -1,4 +1,6 @@
 streamlit
 pandas
-google-auth
-gspread 
+firebase-admin
+python-dateutil
+uuid
+google-cloud-firestore

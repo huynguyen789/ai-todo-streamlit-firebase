@@ -1,53 +1,74 @@
-# Google Sheets Streamlit Demo
+# Todo List App with Streamlit and Firestore
 
-A simple Streamlit application that demonstrates connection to Google Sheets.
+A simple, elegant todo list application built with Streamlit and Firebase Firestore.
 
-## Setup
+## Features
 
-1. Create and activate virtual environment:
+- Create, read, update, and delete todo items
+- Assign priority levels (High, Medium-High, Medium, Low)
+- Mark tasks as completed
+- Visual indicators for priority levels
+- Statistics dashboard with progress tracking
+- Responsive card-based UI
+
+## Setup Instructions
+
+### Prerequisites
+
+- Python 3.8 or higher
+- Firebase project with Firestore database
+
+### Step 1: Clone the repository
+
 ```bash
-# Create virtual environment
-python -m venv .venv
-
-# Activate virtual environment (Mac/Linux)
-source .venv/bin/activate
-
-# Activate virtual environment (Windows)
-.venv\Scripts\activate
+git clone <repository-url>
+cd ai-todo-streamlit-gsheet
 ```
 
-2. Install uv package manager:
+### Step 2: Set up Firebase
+
+1. Create a Firebase project at [Firebase Console](https://console.firebase.google.com/)
+2. Set up a Firestore database in your project
+3. Generate a service account key:
+   - Go to Project Settings > Service Accounts
+   - Click "Generate New Private Key"
+   - Save the JSON file as `firebase.json` in the `data` directory
+
+### Step 3: Install dependencies
+
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.local/bin/env  # Add uv to PATH
+pip install -r requirements.txt
 ```
 
-3. Install dependencies using uv:
+Or with uv:
+
 ```bash
 uv pip install -r requirements.txt
 ```
 
-4. Make sure your Google Sheet is shared with the service account email:
-```
-ai-todo-list@sample-firebase-ai-app-f63fd.iam.gserviceaccount.com
-```
+### Step 4: Run the application
 
-5. Run the Streamlit app:
 ```bash
 streamlit run app.py
 ```
 
-## Features
+## Project Structure
 
-- Connects to Google Sheets using service account authentication
-- Displays sheet data in a Streamlit dataframe
-- Shows basic statistics about the data
-- Handles errors gracefully
+- `app.py`: Main application file with Streamlit UI and Firestore logic
+- `data/firebase.json`: Firebase service account credentials
+- `document.md`: Project documentation and architecture
+- `requirements.txt`: Python dependencies
 
-## Configuration
+## How It Works
 
-The app uses Streamlit's secrets management to store:
-- Google Sheets credentials
-- Spreadsheet URL
+The application uses:
+- Streamlit for the user interface
+- Firebase Admin SDK to connect to Firestore
+- Firestore for storing todo items
+- Caching to improve performance
 
-These are stored in `.streamlit/secrets.toml` (not committed to version control) 
+See `document.md` for detailed architecture and design decisions.
+
+## License
+
+MIT 
