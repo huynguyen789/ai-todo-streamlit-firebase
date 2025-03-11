@@ -52,3 +52,6 @@ credentials/
 .Trashes
 ehthumbs.db
 Thumbs.db 
+
+# Credentials
+google_sheet_cred.json
