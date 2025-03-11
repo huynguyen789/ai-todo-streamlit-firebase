@@ -68,14 +68,32 @@ def get_firebase_app():
     Output: Firebase app instance
     """
     if not firebase_admin._apps:
-        # Get credentials from Streamlit secrets
-        firebase_config = st.secrets["firebase"]
-        
-        # Create a credentials object from the dictionary
-        cred = credentials.Certificate(firebase_config)
-        
-        # Initialize the app
-        return firebase_admin.initialize_app(cred)
+        try:
+            # Get credentials from Streamlit secrets
+            firebase_config = st.secrets["firebase"]
+            
+            # Ensure the credentials are in the correct format
+            # Create a credentials object from the dictionary
+            cred = credentials.Certificate(firebase_config)
+            
+            # Initialize the app
+            return firebase_admin.initialize_app(cred)
+        except Exception as e:
+            # If there's an error with the secrets format, try an alternative approach
+            st.error(f"Error initializing Firebase: {str(e)}")
+            
+            # Create a temporary JSON file with the credentials
+            firebase_config = st.secrets["firebase"]
+            temp_cred_path = "/tmp/firebase_credentials.json"
+            
+            with open(temp_cred_path, "w") as f:
+                json.dump(firebase_config, f)
+            
+            # Use the file path for credentials
+            cred = credentials.Certificate(temp_cred_path)
+            
+            # Initialize the app
+            return firebase_admin.initialize_app(cred)
     return firebase_admin.get_app()
 
 @st.cache_resource
