@@ -420,8 +420,7 @@ with st.sidebar:
     # Hide completed tasks toggle - simplified to avoid double update
     show_completed = st.toggle(
         "Show/Hide Completed Tasks",
-        value=st.session_state.show_completed,
-        key="show_completed"  # This will automatically update session state
+        key="show_completed"  # This will use the value from session state without setting a default
     )
     
     # Tabs for different sections
