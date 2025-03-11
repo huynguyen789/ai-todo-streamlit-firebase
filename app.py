@@ -6,6 +6,7 @@ Logic:
 - Cache data for performance
 - Handle API operations with simple retries
 - Clean, minimalist UI with inline task editing and organized sidebar
+- Option to hide/show completed tasks
 """
 
 import streamlit as st
@@ -380,178 +381,37 @@ st.markdown("""
 # Main content
 st.title("✅ Todo List")
 
-# Add new todo section - initially collapsed
-with st.expander("➕ Add New Task", expanded=False):
-    st.markdown('<div class="add-form">', unsafe_allow_html=True)
-    with st.form("add_todo_form", clear_on_submit=True):
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            new_todo = st.text_input("Task Description", placeholder="Enter your task here...")
-        with col2:
-            new_score = st.selectbox(
-                "Priority",
-                options=list(SCORE_OPTIONS.keys()),
-                format_func=lambda x: SCORE_OPTIONS[x],
-                key="new_score"
-            )
-        
-        col1, col2, col3 = st.columns([3, 1, 1])
-        with col3:
-            st.markdown('<div class="add-task-btn">', unsafe_allow_html=True)
-            submitted = st.form_submit_button("Add Task", use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        if submitted and new_todo:
-            try:
-                add_todo(new_todo, new_score)
-                st.success("Task added successfully!")
-                time.sleep(1)  # Add delay for UI feedback
-                st.rerun()
-            except Exception as e:
-                st.error(f"Failed to add task: {str(e)}")
-    st.markdown('</div>', unsafe_allow_html=True)
+# Initialize show_completed in session state if not exists
+if 'show_completed' not in st.session_state:
+    st.session_state.show_completed = True
 
+# Load todos
 try:
-    # Load todos
     df = load_data()
-    
-    if not df.empty:
-        # Sort by score (highest to lowest) and display todos
-        df = df.sort_values('score', ascending=False)
-        
-        # Store task edit states
-        if 'edit_states' not in st.session_state:
-            st.session_state.edit_states = {}
-            
-        # Store the task being edited
-        if 'editing_task' not in st.session_state:
-            st.session_state.editing_task = None
-            
-        # Function to toggle task completion status
-        def toggle_status(task_id, current_status, task_text, score):
-            new_status = "pending" if current_status == "completed" else "completed"
-            update_todo(task_id, task_text, new_status, score)
-            st.rerun()
-            
-        # Function to delete a task
-        def delete_task(task_id):
-            delete_todo(task_id)
-            st.success("Task deleted!")
-            time.sleep(0.5)
-            st.rerun()
-        
-        # Display all tasks in a clean list
-        for idx, row in df.iterrows():
-            task_id = row['id']
-            priority_int = int(row['score'])
-            dot_color = SCORE_COLORS.get(priority_int, "#e0e0e0")
-            task_status = "completed" if row['status'] == 'completed' else "pending"
-            task_class = "completed-task" if task_status == "completed" else ""
-            
-            # Create a container for each task
-            task_container = st.container()
-            
-            # Create columns for task display and actions
-            with task_container:
-                # Create columns for the task and action buttons
-                col1, col2, col3, col4 = st.columns([20, 1, 1, 1])
-                
-                with col1:
-                    # Task item with minimal info
-                    st.markdown(f"""
-                    <div class="task-item" id="task-{task_id}">
-                        <div class="priority-dot" style="background-color: {dot_color};"></div>
-                        <p class="task-text {task_class}">{row['task']}</p>
-                        <span class="priority-emoji">{SCORE_OPTIONS[priority_int].split()[0]}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                # Action buttons as actual Streamlit buttons
-                with col2:
-                    if st.button("✓", key=f"complete_{idx}", help=f"Mark as {'pending' if task_status == 'completed' else 'completed'}"):
-                        toggle_status(task_id, task_status, row['task'], priority_int)
-                
-                with col3:
-                    # Set the editing task and show edit form
-                    if st.button("✎", key=f"edit_{idx}", help="Edit task"):
-                        # Store current values in session state for editing
-                        st.session_state.editing_task = {
-                            'id': task_id,
-                            'task': row['task'],
-                            'status': task_status,
-                            'score': priority_int
-                        }
-                        st.rerun()
-                
-                with col4:
-                    if st.button("🗑", key=f"delete_{idx}", help="Delete task"):
-                        delete_task(task_id)
-        
-        # Show edit form if a task is being edited
-        if st.session_state.editing_task:
-            with st.form(key="edit_task_form"):
-                st.subheader("Edit Task")
-                
-                edit_task = st.text_input("Task", value=st.session_state.editing_task['task'])
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    edit_status = st.checkbox(
-                        "Completed", 
-                        value=True if st.session_state.editing_task['status'] == 'completed' else False
-                    )
-                    edit_status_value = "completed" if edit_status else "pending"
-                
-                with col2:
-                    edit_score = st.selectbox(
-                        "Priority",
-                        options=list(SCORE_OPTIONS.keys()),
-                        format_func=lambda x: SCORE_OPTIONS[x],
-                        index=list(SCORE_OPTIONS.keys()).index(st.session_state.editing_task['score']) 
-                            if st.session_state.editing_task['score'] in SCORE_OPTIONS.keys() else 0
-                    )
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if st.form_submit_button("Update"):
-                        update_todo(
-                            st.session_state.editing_task['id'], 
-                            edit_task, 
-                            edit_status_value, 
-                            edit_score
-                        )
-                        st.session_state.editing_task = None
-                        st.success("Task updated!")
-                        time.sleep(0.5)
-                        st.rerun()
-                
-                with col2:
-                    if st.form_submit_button("Cancel"):
-                        st.session_state.editing_task = None
-                        st.rerun()
-    else:
-        st.info("No tasks yet! Add your first task above.")
-
 except Exception as e:
     st.error(f"An error occurred: {str(e)}")
     st.info("Please try refreshing the page in a few moments...")
+    df = pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': []})
 
 # Sidebar with tabs
 with st.sidebar:
     st.title("Todo List")
     
-    # Refresh button
-    if st.button("🔄 Refresh", use_container_width=True):
-        st.cache_data.clear()
-        st.success("Refreshing data...")
-        time.sleep(1)  # Add delay for UI feedback
-        st.rerun()
+    # Hide completed tasks toggle - simplified to avoid double update
+    show_completed = st.toggle(
+        "Show/Hide Completed Tasks",
+        value=st.session_state.show_completed,
+        key="show_completed"  # This will automatically update session state
+    )
     
     # Tabs for different sections
     tab_options = ["📊 Statistics", "🔍 Debug Info"]
-    selected_tab = st.radio("", tab_options, label_visibility="collapsed")
+    selected_tab = st.radio(
+        "View Options",
+        options=tab_options,
+        label_visibility="collapsed",
+        key="sidebar_tabs"
+    )
     
     # Stats tab
     if selected_tab == "📊 Statistics" and not df.empty:
@@ -623,6 +483,159 @@ with st.sidebar:
                 })
             else:
                 st.write("No data available")
+
+# Add new todo section - initially collapsed
+with st.expander("➕ Add New Task", expanded=False):
+
+    with st.form("add_todo_form", clear_on_submit=True):
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_todo = st.text_input("Task Description", placeholder="Enter your task here...")
+        with col2:
+            new_score = st.selectbox(
+                "Priority",
+                options=list(SCORE_OPTIONS.keys()),
+                format_func=lambda x: SCORE_OPTIONS[x],
+                key="new_score"
+            )
+        
+        col1, col2, col3 = st.columns([3, 1, 1])
+        with col3:
+            st.markdown('<div class="add-task-btn">', unsafe_allow_html=True)
+            submitted = st.form_submit_button("Add Task", use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        if submitted and new_todo:
+            try:
+                add_todo(new_todo, new_score)
+                st.success("Task added successfully!")
+                time.sleep(1)  # Add delay for UI feedback
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to add task: {str(e)}")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Display tasks
+if not df.empty:
+    # Sort by score (highest to lowest) and filter based on show_completed setting
+    df = df.sort_values('score', ascending=False)
+    if not show_completed:  # Use the toggle value directly
+        df = df[df['status'] != 'completed']
     
-    # Cache info at the bottom
-    st.info("ℹ️ Data is cached for 10 minutes") 
+    # Store task edit states
+    if 'edit_states' not in st.session_state:
+        st.session_state.edit_states = {}
+        
+    # Store the task being edited
+    if 'editing_task' not in st.session_state:
+        st.session_state.editing_task = None
+        
+    # Function to toggle task completion status
+    def toggle_status(task_id, current_status, task_text, score):
+        new_status = "pending" if current_status == "completed" else "completed"
+        update_todo(task_id, task_text, new_status, score)
+        st.rerun()
+        
+    # Function to delete a task
+    def delete_task(task_id):
+        delete_todo(task_id)
+        st.success("Task deleted!")
+        time.sleep(0.5)
+        st.rerun()
+    
+    # Display all tasks in a clean list
+    for idx, row in df.iterrows():
+        task_id = row['id']
+        priority_int = int(row['score'])
+        dot_color = SCORE_COLORS.get(priority_int, "#e0e0e0")
+        task_status = "completed" if row['status'] == 'completed' else "pending"
+        task_class = "completed-task" if task_status == "completed" else ""
+        
+        # Create a container for each task
+        task_container = st.container()
+        
+        # Create columns for task display and actions
+        with task_container:
+            # Create columns for the task and action buttons
+            col1, col2, col3, col4 = st.columns([20, 1, 1, 1])
+            
+            with col1:
+                # Task item with minimal info
+                st.markdown(f"""
+                <div class="task-item" id="task-{task_id}">
+                    <div class="priority-dot" style="background-color: {dot_color};"></div>
+                    <p class="task-text {task_class}">{row['task']}</p>
+                    <span class="priority-emoji">{SCORE_OPTIONS[priority_int].split()[0]}</span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Action buttons as actual Streamlit buttons
+            with col2:
+                if st.button("✓", key=f"complete_{idx}", help=f"Mark as {'pending' if task_status == 'completed' else 'completed'}"):
+                    toggle_status(task_id, task_status, row['task'], priority_int)
+            
+            with col3:
+                # Set the editing task and show edit form
+                if st.button("✎", key=f"edit_{idx}", help="Edit task"):
+                    # Store current values in session state for editing
+                    st.session_state.editing_task = {
+                        'id': task_id,
+                        'task': row['task'],
+                        'status': task_status,
+                        'score': priority_int
+                    }
+                    st.rerun()
+            
+            with col4:
+                if st.button("🗑", key=f"delete_{idx}", help="Delete task"):
+                    delete_task(task_id)
+        
+    # Show edit form if a task is being edited
+    if st.session_state.editing_task:
+        with st.form(key="edit_task_form"):
+            st.subheader("Edit Task")
+            
+            edit_task = st.text_input("Task", value=st.session_state.editing_task['task'])
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                edit_status = st.checkbox(
+                    "Completed", 
+                    value=True if st.session_state.editing_task['status'] == 'completed' else False
+                )
+                edit_status_value = "completed" if edit_status else "pending"
+            
+            with col2:
+                edit_score = st.selectbox(
+                    "Priority",
+                    options=list(SCORE_OPTIONS.keys()),
+                    format_func=lambda x: SCORE_OPTIONS[x],
+                    index=list(SCORE_OPTIONS.keys()).index(st.session_state.editing_task['score']) 
+                        if st.session_state.editing_task['score'] in SCORE_OPTIONS.keys() else 0
+                )
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.form_submit_button("Update"):
+                    update_todo(
+                        st.session_state.editing_task['id'], 
+                        edit_task, 
+                        edit_status_value, 
+                        edit_score
+                    )
+                    st.session_state.editing_task = None
+                    st.success("Task updated!")
+                    time.sleep(0.5)
+                    st.rerun()
+            
+            with col2:
+                if st.form_submit_button("Cancel"):
+                    st.session_state.editing_task = None
+                    st.rerun()
+else:
+    st.info("No tasks yet! Add your first task above.")
+
+# # Cache info at the bottom
+# st.info("ℹ️ Data is cached for 10 minutes") 
