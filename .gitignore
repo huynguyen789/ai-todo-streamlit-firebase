@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -21,10 +20,12 @@ var/
 *.egg
 
 # Virtual Environment
+.venv/
 venv/
 ENV/
 env/
 .env
+.env.*
 
 # Streamlit
 .streamlit/secrets.toml
@@ -33,8 +34,6 @@ env/
 data/*.json
 *.pem
 *.key
-.env
-.env.*
 secrets/
 credentials/
 
@@ -55,3 +54,4 @@ Thumbs.db
 
 # Credentials
 google_sheet_cred.json
+*.json
