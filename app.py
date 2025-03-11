@@ -244,13 +244,14 @@ st.markdown("""
         align-items: center;
         padding: 0.75rem 1rem;
         margin-bottom: 0.5rem;
-        background-color: white;
+        background-color: rgba(255, 255, 255, 0.1);
         border-radius: 6px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         transition: all 0.2s ease;
     }
     .task-item:hover {
-        box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+        background-color: rgba(255, 255, 255, 0.15);
     }
     
     /* Priority dot */
@@ -270,7 +271,7 @@ st.markdown("""
     }
     .completed-task {
         text-decoration: line-through;
-        color: #9e9e9e;
+        opacity: 0.7;
     }
     
     /* Task actions */
@@ -281,92 +282,17 @@ st.markdown("""
     }
     
     /* Action buttons */
-    .action-btn {
-        background: none;
-        border: none;
-        color: #757575;
-        cursor: pointer;
-        padding: 4px;
-        border-radius: 4px;
-        font-size: 1.1rem;
-        transition: all 0.2s ease;
-    }
-    .action-btn:hover {
-        background-color: #f0f0f0;
-        color: #1E88E5;
-    }
-    
-    /* Add form styling */
-    .add-form {
-        background-color: white;
-        padding: 1.5rem;
-        border-radius: 8px;
-        margin-bottom: 2rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    
-    /* Button styling */
-    .stButton>button {
+    .stButton > button {
         border-radius: 4px;
         font-weight: 500;
     }
     
-    /* Update button */
-    .update-btn>button {
-        background-color: #4CAF50;
-        color: white;
-    }
-    
-    /* Delete button */
-    .delete-btn>button {
-        background-color: #f44336;
-        color: white;
-    }
-    
-    /* Sidebar tabs */
-    .sidebar-tab {
-        padding: 0.5rem;
-        margin-bottom: 0.5rem;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-    
-    /* Stats cards */
-    .stat-card {
-        background-color: white;
-        padding: 1rem;
+    /* Add form styling */
+    .add-form {
+        padding: 1.5rem;
         border-radius: 8px;
-        margin-bottom: 1rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    
-    /* Hide Streamlit elements */
-    div.stButton > button[kind="secondary"] {
-        background-color: transparent;
-        border: none;
-        padding: 0;
-        font-size: 1rem;
-        color: #1E88E5;
-    }
-    
-    /* Add task button */
-    .add-task-btn>button {
-        background-color: #1E88E5;
-        color: white;
-    }
-    
-    /* Task edit dialog */
-    .task-edit-dialog {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.5);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
+        margin-bottom: 2rem;
+        background-color: rgba(255, 255, 255, 0.05);
     }
     
     /* Hide default streamlit elements */
@@ -378,6 +304,75 @@ st.markdown("""
     /* Hide expander header */
     .streamlit-expanderHeader {
         display: none !important;
+    }
+    
+    /* Task edit dialog */
+    .task-edit-dialog {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+    
+    /* Improve button styling */
+    button[data-testid="baseButton-secondary"] {
+        background-color: transparent !important;
+        border: none !important;
+        padding: 0.3rem !important;
+        min-width: 2rem !important;
+        color: inherit !important;
+    }
+    
+    /* Improve form elements */
+    [data-testid="stForm"] {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    
+    /* Improve progress bar in dark mode */
+    .stat-card .progress-bg {
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+    }
+    
+    .stat-card .progress-fill {
+        background-color: #4CAF50;
+        border-radius: 4px;
+    }
+    
+    /* Ensure emoji visibility */
+    .priority-emoji {
+        filter: none !important;
+        margin-left: 8px;
+        font-size: 0.8rem;
+    }
+    
+    /* Improve sidebar expanders */
+    .sidebar .streamlit-expanderHeader {
+        display: flex !important;
+        color: inherit;
+        background-color: transparent;
+        font-weight: 500;
+    }
+    
+    /* Improve stat cards */
+    .stat-card {
+        background-color: rgba(255, 255, 255, 0.05);
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    
+    /* Improve button contrast */
+    .stButton > button:hover {
+        border-color: rgba(255, 255, 255, 0.5) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -467,7 +462,7 @@ try:
                     <div class="task-item" id="task-{task_id}">
                         <div class="priority-dot" style="background-color: {dot_color};"></div>
                         <p class="task-text {task_class}">{row['task']}</p>
-                        <span style="color: #9e9e9e; font-size: 0.8rem; margin-left: 8px;">{SCORE_OPTIONS[priority_int].split()[0]}</span>
+                        <span class="priority-emoji">{SCORE_OPTIONS[priority_int].split()[0]}</span>
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -570,8 +565,8 @@ with st.sidebar:
             st.markdown(f"""
             <div class="stat-card">
                 <div style="margin-bottom: 0.5rem;">
-                    <div style="height: 8px; background-color: #e0e0e0; border-radius: 4px;">
-                        <div style="height: 8px; width: {progress * 100}%; background-color: #4CAF50; border-radius: 4px;"></div>
+                    <div class="progress-bg" style="height: 8px;">
+                        <div class="progress-fill" style="height: 8px; width: {progress * 100}%;"></div>
                     </div>
                 </div>
                 <p>Completed: {completed}/{total} ({int(progress * 100)}%)</p>
@@ -591,7 +586,7 @@ with st.sidebar:
                 <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
                     <div style="width: 25px; text-align: center;">{emoji}</div>
                     <div style="width: 120px;">{label_text}</div>
-                    <div style="flex-grow: 1; height: 12px; background-color: #f0f0f0; border-radius: 3px;">
+                    <div class="progress-bg" style="flex-grow: 1; height: 12px;">
                         <div style="width: {bar_width}%; height: 12px; background-color: {SCORE_COLORS[score]}; border-radius: 3px;"></div>
                     </div>
                     <div style="width: 30px; text-align: right; margin-left: 5px;">{count}</div>
