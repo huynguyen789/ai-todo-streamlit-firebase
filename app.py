@@ -72,9 +72,11 @@ def get_firebase_app():
             # Get credentials from Streamlit secrets
             firebase_config = st.secrets["firebase"]
             
-            # Ensure the credentials are in the correct format
+            # Convert the AttrDict to a regular dictionary
+            firebase_config_dict = dict(firebase_config)
+            
             # Create a credentials object from the dictionary
-            cred = credentials.Certificate(firebase_config)
+            cred = credentials.Certificate(firebase_config_dict)
             
             # Initialize the app
             return firebase_admin.initialize_app(cred)
@@ -87,7 +89,7 @@ def get_firebase_app():
             temp_cred_path = "/tmp/firebase_credentials.json"
             
             with open(temp_cred_path, "w") as f:
-                json.dump(firebase_config, f)
+                json.dump(dict(firebase_config), f)
             
             # Use the file path for credentials
             cred = credentials.Certificate(temp_cred_path)
