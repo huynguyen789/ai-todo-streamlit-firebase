@@ -1,6 +1,6 @@
 """
 Logic:
-- Connect to Firestore and authenticate with service account
+- Connect to Firestore and authenticate with service account from Streamlit secrets
 - Provide CRUD operations for todo items with scoring (10, 7, 5, 1)
 - Display todo list with add/edit/delete functionality and colored score selection
 - Cache data for performance
@@ -64,15 +64,15 @@ def retry_with_backoff(retries=3, backoff_in_seconds=1):
 def get_firebase_app():
     """
     Input: None
-    Process: Initializes Firebase app with credentials
+    Process: Initializes Firebase app with credentials from Streamlit secrets
     Output: Firebase app instance
     """
     if not firebase_admin._apps:
-        # Path to the Firebase credentials file
-        cred_path = os.path.join(os.path.dirname(__file__), "data", "firebase.json")
+        # Get credentials from Streamlit secrets
+        firebase_config = st.secrets["firebase"]
         
-        # Load credentials from file
-        cred = credentials.Certificate(cred_path)
+        # Create a credentials object from the dictionary
+        cred = credentials.Certificate(firebase_config)
         
         # Initialize the app
         return firebase_admin.initialize_app(cred)
