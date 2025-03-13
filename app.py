@@ -7,6 +7,7 @@ Logic:
 - Handle API operations with simple retries
 - Clean, minimalist UI with inline task editing and organized sidebar
 - Option to hide/show completed tasks in the main page for easy access
+- Allow reordering tasks with up/down movement controls
 """
 
 import streamlit as st
@@ -129,8 +130,8 @@ def initialize_collection():
 def load_data():
     """
     Input: None
-    Process: Loads todo data from Firestore
-    Output: Returns DataFrame with todos
+    Process: Loads todo data from Firestore, ensures position field exists
+    Output: Returns DataFrame with todos sorted by position
     """
     try:
         db = get_firestore_db()
@@ -157,36 +158,69 @@ def load_data():
             if 'score' not in df.columns:
                 df['score'] = 1  # Default score
             
-            # Convert score to numeric, replacing invalid values with 1
+            # Convert score to numeric, replacing invalid values with 2
             df['score'] = pd.to_numeric(df['score'], errors='coerce').fillna(2)
             
             # Convert any tasks with score 1 to score 2 (the new lowest priority)
             df.loc[df['score'] == 1, 'score'] = 2
             
+            # Ensure position column exists
+            if 'position' not in df.columns:
+                # If position doesn't exist, create it based on current order
+                df['position'] = range(len(df))
+                
+                # Update positions in Firestore
+                for idx, row in df.iterrows():
+                    db.collection('todos').document(row['id']).update({'position': idx})
+            
+            # Convert position to numeric and sort by it
+            df['position'] = pd.to_numeric(df['position'], errors='coerce').fillna(0)
+            df = df.sort_values('position')
+            
             return df
         else:
-            return pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': []})
+            return pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': [], 'position': []})
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         # Return empty DataFrame with required columns
-        return pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': []})
+        return pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': [], 'position': []})
 
 @retry_with_backoff(retries=3)
 def add_todo(task, score):
     """
     Input: task text and score
-    Process: Adds new todo to Firestore with score
+    Process: Adds new todo to Firestore with score and position at top
     Output: None
     """
     try:
         db = get_firestore_db()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        # Get current todos to determine position
+        todos_ref = db.collection('todos')
+        todos = todos_ref.stream()
+        
+        # Find the minimum position value (to place new task at top)
+        min_position = 0
+        for todo in todos:
+            todo_dict = todo.to_dict()
+            if 'position' in todo_dict:
+                position_value = todo_dict['position']
+                # Convert to int if it's a NumPy type
+                if hasattr(position_value, 'item'):
+                    position_value = position_value.item()
+                if position_value < min_position:
+                    min_position = position_value
+        
+        # New position is one less than the minimum (to place at top)
+        new_position = min_position - 1
+        
         # Create new todo document
         new_todo = {
             'task': task,
             'status': 'pending',
-            'score': score,
+            'score': int(score),  # Ensure score is a native Python int
+            'position': int(new_position),  # Ensure position is a native Python int
             'created_at': now,
             'updated_at': now
         }
@@ -216,7 +250,7 @@ def update_todo(doc_id, task, status, score):
         todo_ref.update({
             'task': task,
             'status': status,
-            'score': score,
+            'score': int(score),  # Ensure score is a native Python int
             'updated_at': now
         })
         
@@ -244,6 +278,96 @@ def delete_todo(doc_id):
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Error deleting todo: {str(e)}")
+        raise
+
+@retry_with_backoff(retries=3)
+def move_todo_up(doc_id, current_position, df):
+    """
+    Input: document ID, current position, and dataframe of todos
+    Process: Moves todo up in the list by swapping positions with the task above it
+    Output: None
+    """
+    try:
+        db = get_firestore_db()
+        
+        # Find the task immediately above this one
+        df_sorted = df.sort_values('position')
+        
+        # Get positions higher than current (smaller position value = higher in list)
+        higher_positions = df_sorted[df_sorted['position'] < current_position]['position'].values
+        
+        if len(higher_positions) > 0:
+            # Get the closest higher position
+            target_position = max(higher_positions)
+            
+            # Convert NumPy types to native Python types
+            target_position = int(target_position)
+            current_position = int(current_position)
+            
+            # Find the task with this position
+            target_task = df_sorted[df_sorted['position'] == target_position].iloc[0]
+            target_id = target_task['id']
+            
+            # Swap positions
+            db.collection('todos').document(doc_id).update({
+                'position': target_position,
+                'updated_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            
+            db.collection('todos').document(target_id).update({
+                'position': current_position,
+                'updated_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            
+            # Clear cache to refresh data
+            st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Error moving todo up: {str(e)}")
+        raise
+
+@retry_with_backoff(retries=3)
+def move_todo_down(doc_id, current_position, df):
+    """
+    Input: document ID, current position, and dataframe of todos
+    Process: Moves todo down in the list by swapping positions with the task below it
+    Output: None
+    """
+    try:
+        db = get_firestore_db()
+        
+        # Find the task immediately below this one
+        df_sorted = df.sort_values('position')
+        
+        # Get positions lower than current (larger position value = lower in list)
+        lower_positions = df_sorted[df_sorted['position'] > current_position]['position'].values
+        
+        if len(lower_positions) > 0:
+            # Get the closest lower position
+            target_position = min(lower_positions)
+            
+            # Convert NumPy types to native Python types
+            target_position = int(target_position)
+            current_position = int(current_position)
+            
+            # Find the task with this position
+            target_task = df_sorted[df_sorted['position'] == target_position].iloc[0]
+            target_id = target_task['id']
+            
+            # Swap positions
+            db.collection('todos').document(doc_id).update({
+                'position': target_position,
+                'updated_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            
+            db.collection('todos').document(target_id).update({
+                'position': current_position,
+                'updated_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            
+            # Clear cache to refresh data
+            st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Error moving todo down: {str(e)}")
         raise
 
 # Page config
@@ -423,7 +547,7 @@ try:
 except Exception as e:
     st.error(f"An error occurred: {str(e)}")
     st.info("Please try refreshing the page in a few moments...")
-    df = pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': []})
+    df = pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': [], 'position': []})
 
 # Sidebar with tabs
 with st.sidebar:
@@ -572,6 +696,7 @@ if not df.empty:
     for idx, row in df.iterrows():
         task_id = row['id']
         priority_int = int(row['score'])
+        position = row['position']
         dot_color = SCORE_COLORS.get(priority_int, "#e0e0e0")  # Default to light gray if score not found
         task_status = "completed" if row['status'] == 'completed' else "pending"
         task_class = "completed-task" if task_status == "completed" else ""
@@ -582,7 +707,7 @@ if not df.empty:
         # Create columns for task display and actions
         with task_container:
             # Create columns for the task and action buttons
-            col1, col2, col3, col4 = st.columns([20, 1, 1, 1])
+            col1, col2, col3, col4, col5, col6 = st.columns([20, 1, 1, 1, 1, 1])
             
             with col1:
                 # Task item with minimal info
@@ -614,6 +739,18 @@ if not df.empty:
             with col4:
                 if st.button("🗑", key=f"delete_{idx}", help="Delete task"):
                     delete_task(task_id)
+            
+            # Add move up button
+            with col5:
+                if st.button("↑", key=f"up_{idx}", help="Move task up"):
+                    move_todo_up(task_id, int(position), df)
+                    st.rerun()
+            
+            # Add move down button
+            with col6:
+                if st.button("↓", key=f"down_{idx}", help="Move task down"):
+                    move_todo_down(task_id, int(position), df)
+                    st.rerun()
         
     # Show edit form if a task is being edited
     if st.session_state.editing_task:
