@@ -1,12 +1,12 @@
 """
 Logic:
 - Connect to Firestore and authenticate with service account from Streamlit secrets
-- Provide CRUD operations for todo items with scoring (10, 7, 5, 1)
+- Provide CRUD operations for todo items with scoring (10, 7, 5, 2)
 - Display todo list with add/edit/delete functionality and colored score selection
 - Cache data for performance
 - Handle API operations with simple retries
 - Clean, minimalist UI with inline task editing and organized sidebar
-- Option to hide/show completed tasks
+- Option to hide/show completed tasks in the main page for easy access
 """
 
 import streamlit as st
@@ -408,6 +408,15 @@ st.title("✅ Todo List")
 if 'show_completed' not in st.session_state:
     st.session_state.show_completed = True
 
+# Hide completed tasks toggle - moved from sidebar to main page
+show_completed = st.toggle(
+    "Show/Hide Completed Tasks",
+    key="show_completed"  # This will use the value from session state without setting a default
+)
+
+# Add a horizontal line for visual separation
+st.markdown("---")
+
 # Load todos
 try:
     df = load_data()
@@ -419,12 +428,6 @@ except Exception as e:
 # Sidebar with tabs
 with st.sidebar:
     st.title("Todo List")
-    
-    # Hide completed tasks toggle - simplified to avoid double update
-    show_completed = st.toggle(
-        "Show/Hide Completed Tasks",
-        key="show_completed"  # This will use the value from session state without setting a default
-    )
     
     # Tabs for different sections
     tab_options = ["📊 Statistics", "🔍 Debug Info"]
