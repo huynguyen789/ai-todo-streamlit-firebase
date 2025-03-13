@@ -23,10 +23,10 @@ import json
 
 # Score options with colors
 SCORE_OPTIONS = {
-    10: "🔴 High Priority (10)",
-    7: "🟡 Medium-High (7)",
-    5: "🟢 Medium (5)",
-    1: "⚪ Low (1)"
+    10: "🔴 Important-Urgent (10)",
+    7: "🟡 Important-Not Urgent (7)",
+    5: "🟢 Not Important-Urgent (5)",
+    2: "⚪ Not Important-Not Urgent (2)"
 }
 
 # Score to color mapping
@@ -34,7 +34,7 @@ SCORE_COLORS = {
     10: "#ff5252",  # Red
     7: "#ffd740",   # Yellow
     5: "#4caf50",   # Green
-    1: "#e0e0e0"    # Light Gray
+    2: "#e0e0e0"    # Light Gray
 }
 
 def retry_with_backoff(retries=3, backoff_in_seconds=1):
@@ -158,7 +158,10 @@ def load_data():
                 df['score'] = 1  # Default score
             
             # Convert score to numeric, replacing invalid values with 1
-            df['score'] = pd.to_numeric(df['score'], errors='coerce').fillna(1)
+            df['score'] = pd.to_numeric(df['score'], errors='coerce').fillna(2)
+            
+            # Convert any tasks with score 1 to score 2 (the new lowest priority)
+            df.loc[df['score'] == 1, 'score'] = 2
             
             return df
         else:
@@ -566,7 +569,7 @@ if not df.empty:
     for idx, row in df.iterrows():
         task_id = row['id']
         priority_int = int(row['score'])
-        dot_color = SCORE_COLORS.get(priority_int, "#e0e0e0")
+        dot_color = SCORE_COLORS.get(priority_int, "#e0e0e0")  # Default to light gray if score not found
         task_status = "completed" if row['status'] == 'completed' else "pending"
         task_class = "completed-task" if task_status == "completed" else ""
         
@@ -584,7 +587,7 @@ if not df.empty:
                 <div class="task-item" id="task-{task_id}">
                     <div class="priority-dot" style="background-color: {dot_color};"></div>
                     <p class="task-text {task_class}">{row['task']}</p>
-                    <span class="priority-emoji">{SCORE_OPTIONS[priority_int].split()[0]}</span>
+                    <span class="priority-emoji">{SCORE_OPTIONS.get(priority_int, "⚪ Unknown").split()[0]}</span>
                 </div>
                 """, unsafe_allow_html=True)
             
