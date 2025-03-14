@@ -38,6 +38,13 @@ SCORE_COLORS = {
     2: "#e0e0e0"    # Light Gray
 }
 
+# Default categories with colors
+DEFAULT_CATEGORIES = {
+    "work": {"name": "Work", "color": "#FF6B6B"},  # Coral Red
+    "life": {"name": "Life", "color": "#4ECDC4"},  # Turquoise
+    "projects": {"name": "Projects", "color": "#45B7D1"}  # Sky Blue
+}
+
 def retry_with_backoff(retries=3, backoff_in_seconds=1):
     """
     Input: number of retries and backoff time
@@ -126,6 +133,136 @@ def initialize_collection():
     # Just check if we can access the collection
     todos_ref.limit(1).get()
 
+@retry_with_backoff(retries=3)
+def initialize_categories():
+    """
+    Input: None
+    Process: Ensures default categories exist in Firestore
+    Output: None
+    """
+    try:
+        db = get_firestore_db()
+        categories_ref = db.collection('categories')
+        
+        # Check if categories collection is empty
+        existing_categories = list(categories_ref.limit(1).stream())
+        
+        if not existing_categories:
+            # Add default categories
+            for category_id, category_data in DEFAULT_CATEGORIES.items():
+                categories_ref.document(category_id).set({
+                    'name': category_data['name'],
+                    'color': category_data['color'],
+                    'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    'updated_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+    except Exception as e:
+        st.error(f"Error initializing categories: {str(e)}")
+        raise
+
+@st.cache_data(ttl=600)
+def load_categories():
+    """
+    Input: None
+    Process: Loads categories from Firestore
+    Output: DataFrame with categories
+    """
+    try:
+        db = get_firestore_db()
+        categories_ref = db.collection('categories')
+        categories = categories_ref.stream()
+        
+        categories_list = []
+        for category in categories:
+            category_dict = category.to_dict()
+            category_dict['id'] = category.id
+            categories_list.append(category_dict)
+            
+        if categories_list:
+            return pd.DataFrame(categories_list)
+        else:
+            return pd.DataFrame({'id': [], 'name': [], 'color': [], 'created_at': [], 'updated_at': []})
+    except Exception as e:
+        st.error(f"Error loading categories: {str(e)}")
+        return pd.DataFrame({'id': [], 'name': [], 'color': [], 'created_at': [], 'updated_at': []})
+
+@retry_with_backoff(retries=3)
+def add_category(name, color):
+    """
+    Input: category name and color
+    Process: Adds new category to Firestore
+    Output: None
+    """
+    try:
+        db = get_firestore_db()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        new_category = {
+            'name': name,
+            'color': color,
+            'created_at': now,
+            'updated_at': now
+        }
+        
+        db.collection('categories').add(new_category)
+        st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Error adding category: {str(e)}")
+        raise
+
+@retry_with_backoff(retries=3)
+def update_category(doc_id, name, color):
+    """
+    Input: document ID, updated name and color
+    Process: Updates category in Firestore
+    Output: None
+    """
+    try:
+        db = get_firestore_db()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        category_ref = db.collection('categories').document(doc_id)
+        category_ref.update({
+            'name': name,
+            'color': color,
+            'updated_at': now
+        })
+        
+        st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Error updating category: {str(e)}")
+        raise
+
+@retry_with_backoff(retries=3)
+def delete_category(doc_id):
+    """
+    Input: document ID
+    Process: Deletes category from Firestore and updates associated todos
+    Output: None
+    """
+    try:
+        db = get_firestore_db()
+        
+        # Delete the category
+        category_ref = db.collection('categories').document(doc_id)
+        category_ref.delete()
+        
+        # Update todos that used this category to use default category
+        todos_ref = db.collection('todos')
+        todos = todos_ref.where('category_id', '==', doc_id).stream()
+        
+        for todo in todos:
+            todo_ref = todos_ref.document(todo.id)
+            todo_ref.update({
+                'category_id': 'work',  # Set to default category
+                'updated_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+        
+        st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Error deleting category: {str(e)}")
+        raise
+
 @st.cache_data(ttl=600)  # Cache data for 10 minutes
 def load_data():
     """
@@ -148,6 +285,9 @@ def load_data():
         for todo in todos:
             todo_dict = todo.to_dict()
             todo_dict['id'] = todo.id  # Add document ID
+            # Ensure category_id exists
+            if 'category_id' not in todo_dict:
+                todo_dict['category_id'] = 'work'  # Default to work category
             todos_list.append(todo_dict)
         
         if todos_list:
@@ -179,17 +319,32 @@ def load_data():
             
             return df
         else:
-            return pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': [], 'position': []})
+            # Return empty DataFrame with all required columns including category_id
+            return pd.DataFrame({
+                'task': [], 
+                'status': [], 
+                'score': [], 
+                'id': [], 
+                'position': [],
+                'category_id': []  # Add category_id column
+            })
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
-        # Return empty DataFrame with required columns
-        return pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': [], 'position': []})
+        # Return empty DataFrame with all required columns including category_id
+        return pd.DataFrame({
+            'task': [], 
+            'status': [], 
+            'score': [], 
+            'id': [], 
+            'position': [],
+            'category_id': []  # Add category_id column
+        })
 
 @retry_with_backoff(retries=3)
-def add_todo(task, score):
+def add_todo(task, score, category_id='work'):
     """
-    Input: task text and score
-    Process: Adds new todo to Firestore with score and position at top
+    Input: task text, score, and category_id
+    Process: Adds new todo to Firestore with score and category
     Output: None
     """
     try:
@@ -221,6 +376,7 @@ def add_todo(task, score):
             'status': 'pending',
             'score': int(score),  # Ensure score is a native Python int
             'position': int(new_position),  # Ensure position is a native Python int
+            'category_id': category_id,
             'created_at': now,
             'updated_at': now
         }
@@ -235,9 +391,9 @@ def add_todo(task, score):
         raise
 
 @retry_with_backoff(retries=3)
-def update_todo(doc_id, task, status, score):
+def update_todo(doc_id, task, status, score, category_id=None):
     """
-    Input: document ID, updated task, status and score
+    Input: document ID, updated task, status, score, and optional category_id
     Process: Updates todo in Firestore
     Output: None
     """
@@ -245,14 +401,21 @@ def update_todo(doc_id, task, status, score):
         db = get_firestore_db()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Update document
-        todo_ref = db.collection('todos').document(doc_id)
-        todo_ref.update({
+        # Prepare update data
+        update_data = {
             'task': task,
             'status': status,
             'score': int(score),  # Ensure score is a native Python int
             'updated_at': now
-        })
+        }
+        
+        # Add category_id to update if provided
+        if category_id is not None:
+            update_data['category_id'] = category_id
+        
+        # Update document
+        todo_ref = db.collection('todos').document(doc_id)
+        todo_ref.update(update_data)
         
         # Clear cache to refresh data
         st.cache_data.clear()
@@ -538,6 +701,140 @@ show_completed = st.toggle(
     key="show_completed"  # This will use the value from session state without setting a default
 )
 
+# Initialize categories if needed and load them
+initialize_categories()
+categories_df = load_categories()
+
+# Initialize selected category in session state if not exists
+if 'selected_category' not in st.session_state:
+    st.session_state.selected_category = 'all'
+
+# Category selection
+col1, col2 = st.columns([3, 1])
+with col1:
+    # Convert categories to a dictionary for the selectbox
+    category_options = {'all': 'All Categories'}
+    for _, row in categories_df.iterrows():
+        category_options[row['id']] = row['name']
+    
+    selected_category = st.selectbox(
+        "Select Category",
+        options=list(category_options.keys()),
+        format_func=lambda x: category_options[x],
+        key='selected_category'
+    )
+
+with col2:
+    if st.button("⚙️ Manage Categories", use_container_width=True):
+        st.session_state.show_category_manager = True
+
+# Category Management UI
+if st.session_state.get('show_category_manager', False):
+    with st.expander("Category Management", expanded=True):
+        st.markdown("""
+        <style>
+        .category-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin: 4px 0;
+            background: rgba(255,255,255,0.05);
+            border-radius: 4px;
+        }
+        .category-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .category-name {
+            flex-grow: 1;
+        }
+        .category-actions {
+            display: flex;
+            gap: 8px;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Add new category form
+        with st.form("add_category_form", clear_on_submit=True):
+            st.subheader("Add New Category")
+            new_cat_name = st.text_input("Category Name")
+            new_cat_color = st.color_picker("Category Color", "#4ECDC4")
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.form_submit_button("Add Category", use_container_width=True):
+                    if new_cat_name:
+                        add_category(new_cat_name, new_cat_color)
+                        st.success(f"Category '{new_cat_name}' added!")
+                        time.sleep(0.5)
+                        st.rerun()
+            with col2:
+                if st.form_submit_button("Close Manager", use_container_width=True):
+                    st.session_state.show_category_manager = False
+                    st.rerun()
+        
+        # List existing categories
+        st.subheader("Existing Categories")
+        for _, category in categories_df.iterrows():
+            st.markdown(f"""
+            <div class="category-item">
+                <div class="category-color" style="background-color: {category['color']};"></div>
+                <div class="category-name">{category['name']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button("✎ Edit", key=f"edit_{category['id']}", use_container_width=True):
+                    st.session_state.editing_category = category
+            
+            with col2:
+                if st.button("🗑 Delete", key=f"delete_{category['id']}", help="Delete category", use_container_width=True):
+                    if st.session_state.get('confirm_delete') == category['id']:
+                        delete_category(category['id'])
+                        st.success(f"Category '{category['name']}' deleted!")
+                        st.session_state.confirm_delete = None
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.session_state.confirm_delete = category['id']
+                        st.warning(f"Click again to confirm deleting '{category['name']}'")
+            
+            if st.session_state.get('confirm_delete') == category['id']:
+                st.markdown("""
+                <div style="text-align: center; padding: 8px; color: #ff4444; font-size: 0.9em;">
+                    ⚠️ Click delete again to confirm. Associated tasks will be moved to Work category.
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Edit category form
+        if 'editing_category' in st.session_state:
+            st.markdown("---")
+            with st.form("edit_category_form"):
+                st.subheader(f"Edit Category: {st.session_state.editing_category['name']}")
+                edit_cat_name = st.text_input("Category Name", value=st.session_state.editing_category['name'])
+                edit_cat_color = st.color_picker("Category Color", st.session_state.editing_category['color'])
+                
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    if st.form_submit_button("Update", use_container_width=True):
+                        update_category(
+                            st.session_state.editing_category['id'],
+                            edit_cat_name,
+                            edit_cat_color
+                        )
+                        del st.session_state.editing_category
+                        st.success("Category updated!")
+                        time.sleep(0.5)
+                        st.rerun()
+                with col2:
+                    if st.form_submit_button("Cancel", use_container_width=True):
+                        del st.session_state.editing_category
+                        st.rerun()
+
 # Add a horizontal line for visual separation
 st.markdown("---")
 
@@ -547,7 +844,7 @@ try:
 except Exception as e:
     st.error(f"An error occurred: {str(e)}")
     st.info("Please try refreshing the page in a few moments...")
-    df = pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': [], 'position': []})
+    df = pd.DataFrame({'task': [], 'status': [], 'score': [], 'id': [], 'position': [], 'category_id': []})
 
 # Sidebar with tabs
 with st.sidebar:
@@ -635,9 +932,8 @@ with st.sidebar:
 
 # Add new todo section - initially collapsed
 with st.expander("➕ Add New Task", expanded=False):
-
     with st.form("add_todo_form", clear_on_submit=True):
-        col1, col2 = st.columns([3, 1])
+        col1, col2, col3 = st.columns([3, 1, 1])
         with col1:
             new_todo = st.text_input("Task Description", placeholder="Enter your task here...")
         with col2:
@@ -646,6 +942,13 @@ with st.expander("➕ Add New Task", expanded=False):
                 options=list(SCORE_OPTIONS.keys()),
                 format_func=lambda x: SCORE_OPTIONS[x],
                 key="new_score"
+            )
+        with col3:
+            new_category = st.selectbox(
+                "Category",
+                options=[cat['id'] for _, cat in categories_df.iterrows()],
+                format_func=lambda x: category_options[x],
+                key="new_category"
             )
         
         col1, col2, col3 = st.columns([3, 1, 1])
@@ -656,7 +959,7 @@ with st.expander("➕ Add New Task", expanded=False):
         
         if submitted and new_todo:
             try:
-                add_todo(new_todo, new_score)
+                add_todo(new_todo, new_score, new_category)
                 st.success("Task added successfully!")
                 time.sleep(1)  # Add delay for UI feedback
                 st.rerun()
@@ -671,6 +974,10 @@ if not df.empty:
     if not show_completed:  # Use the toggle value directly
         df = df[df['status'] != 'completed']
     
+    # Filter by selected category
+    if selected_category != 'all':
+        df = df[df['category_id'] == selected_category]
+    
     # Store task edit states
     if 'edit_states' not in st.session_state:
         st.session_state.edit_states = {}
@@ -680,9 +987,9 @@ if not df.empty:
         st.session_state.editing_task = None
         
     # Function to toggle task completion status
-    def toggle_status(task_id, current_status, task_text, score):
+    def toggle_status(task_id, current_status, task_text, score, category_id):
         new_status = "pending" if current_status == "completed" else "completed"
-        update_todo(task_id, task_text, new_status, score)
+        update_todo(task_id, task_text, new_status, score, category_id)
         st.rerun()
         
     # Function to delete a task
@@ -697,9 +1004,19 @@ if not df.empty:
         task_id = row['id']
         priority_int = int(row['score'])
         position = row['position']
+        category_id = row.get('category_id', 'work')  # Default to work if no category
         dot_color = SCORE_COLORS.get(priority_int, "#e0e0e0")  # Default to light gray if score not found
         task_status = "completed" if row['status'] == 'completed' else "pending"
         task_class = "completed-task" if task_status == "completed" else ""
+        
+        # Get category color
+        category_color = "#e0e0e0"  # Default color
+        category_name = "Work"  # Default name
+        if not categories_df.empty:
+            category_row = categories_df[categories_df['id'] == category_id]
+            if not category_row.empty:
+                category_color = category_row.iloc[0]['color']
+                category_name = category_row.iloc[0]['name']
         
         # Create a container for each task
         task_container = st.container()
@@ -710,11 +1027,17 @@ if not df.empty:
             col1, col2, col3, col4, col5, col6 = st.columns([20, 1, 1, 1, 1, 1])
             
             with col1:
-                # Task item with minimal info
+                # Task item with category indicator
                 st.markdown(f"""
                 <div class="task-item" id="task-{task_id}">
                     <div class="priority-dot" style="background-color: {dot_color};"></div>
-                    <p class="task-text {task_class}">{row['task']}</p>
+                    <div style="display: flex; flex-direction: column; flex-grow: 1;">
+                        <p class="task-text {task_class}" style="margin-bottom: 2px;">{row['task']}</p>
+                        <div style="display: flex; align-items: center;">
+                            <div style="width: 8px; height: 8px; border-radius: 50%; background-color: {category_color}; margin-right: 5px;"></div>
+                            <span style="font-size: 0.8em; color: rgba(255,255,255,0.6);">{category_name}</span>
+                        </div>
+                    </div>
                     <span class="priority-emoji">{SCORE_OPTIONS.get(priority_int, "⚪ Unknown").split()[0]}</span>
                 </div>
                 """, unsafe_allow_html=True)
@@ -722,7 +1045,7 @@ if not df.empty:
             # Action buttons as actual Streamlit buttons
             with col2:
                 if st.button("✓", key=f"complete_{idx}", help=f"Mark as {'pending' if task_status == 'completed' else 'completed'}"):
-                    toggle_status(task_id, task_status, row['task'], priority_int)
+                    toggle_status(task_id, task_status, row['task'], priority_int, category_id)
             
             with col3:
                 # Set the editing task and show edit form
@@ -732,7 +1055,8 @@ if not df.empty:
                         'id': task_id,
                         'task': row['task'],
                         'status': task_status,
-                        'score': priority_int
+                        'score': priority_int,
+                        'category_id': category_id
                     }
                     st.rerun()
             
@@ -759,7 +1083,7 @@ if not df.empty:
             
             edit_task = st.text_input("Task", value=st.session_state.editing_task['task'])
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             
             with col1:
                 edit_status = st.checkbox(
@@ -777,6 +1101,15 @@ if not df.empty:
                         if st.session_state.editing_task['score'] in SCORE_OPTIONS.keys() else 0
                 )
             
+            with col3:
+                edit_category = st.selectbox(
+                    "Category",
+                    options=[cat['id'] for _, cat in categories_df.iterrows()],
+                    format_func=lambda x: category_options[x],
+                    index=list(categories_df['id']).index(st.session_state.editing_task['category_id'])
+                        if st.session_state.editing_task['category_id'] in list(categories_df['id']) else 0
+                )
+            
             col1, col2 = st.columns(2)
             
             with col1:
@@ -785,7 +1118,8 @@ if not df.empty:
                         st.session_state.editing_task['id'], 
                         edit_task, 
                         edit_status_value, 
-                        edit_score
+                        edit_score,
+                        edit_category
                     )
                     st.session_state.editing_task = None
                     st.success("Task updated!")
