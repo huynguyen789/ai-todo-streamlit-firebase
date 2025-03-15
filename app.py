@@ -7,7 +7,7 @@ Logic:
 - Cache data for performance
 - Handle API operations with simple retries
 - Clean, minimalist UI with inline task editing and organized sidebar
-- Option to hide/show completed tasks in the main page for easy access
+- Option to hide/show completed tasks in the main page for easy access (default: hidden)
 - Allow reordering tasks with up/down movement controls
 """
 
@@ -41,7 +41,7 @@ try:
     
     # Initialize session state variables
     if 'show_completed' not in st.session_state:
-        st.session_state.show_completed = True
+        st.session_state.show_completed = False
     if 'needs_rerun' not in st.session_state:
         st.session_state.needs_rerun = False
     if 'selected_category' not in st.session_state:
@@ -61,8 +61,7 @@ try:
         # Show/hide completed tasks toggle
         show_completed = st.toggle(
             "Show Completed Tasks",
-            key="show_completed",
-            value=True
+            key="show_completed"
         )
     
     with col3:
