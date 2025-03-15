@@ -810,6 +810,10 @@ categories_df = load_categories()
 if 'selected_category' not in st.session_state:
     st.session_state.selected_category = 'all'
 
+# Initialize new_category session state with "work" as default if not exists
+if 'new_category' not in st.session_state:
+    st.session_state.new_category = 'work'
+
 # Category selection
 col1, col2 = st.columns([3, 1])
 with col1:
@@ -817,7 +821,7 @@ with col1:
     category_options = {'all': 'All Categories'}
     for _, row in categories_df.iterrows():
         category_options[row['id']] = row['name']
-    
+
     selected_category = st.selectbox(
         "Select Category",
         options=list(category_options.keys()),
@@ -1045,11 +1049,17 @@ with st.expander("➕ Add New Task", expanded=False):
                 key="new_score"
             )
         with col3:
+            # Get list of category IDs
+            category_ids = [cat['id'] for _, cat in categories_df.iterrows()]
+            # Find index of 'work' category if it exists, otherwise use 0
+            default_index = category_ids.index('work') if 'work' in category_ids else 0
+            
             new_category = st.selectbox(
                 "Category",
-                options=[cat['id'] for _, cat in categories_df.iterrows()],
+                options=category_ids,
                 format_func=lambda x: category_options[x],
-                key="new_category"
+                key="new_category",
+                index=default_index
             )
         
         col1, col2, col3 = st.columns([3, 1, 1])
