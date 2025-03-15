@@ -1,3 +1,4 @@
+"""
 # Todo List App Documentation
 
 ## Project Architecture
@@ -19,6 +20,29 @@
 +------------+--------------+
 ```
 
+## Code Structure
+
+The application has been refactored into a modular structure:
+
+```
+todo_app/
+├── app.py                 # Main application entry point
+├── database/              # Database operations
+│   ├── __init__.py        # Makes directory a package
+│   ├── firebase_init.py   # Firebase initialization
+│   ├── todo_operations.py # Todo CRUD operations
+│   └── category_ops.py    # Category operations
+├── ui/                    # User interface components
+│   ├── __init__.py        # Makes directory a package
+│   ├── styles.py          # CSS and styling
+│   ├── sidebar.py         # Sidebar components
+│   ├── todo_components.py # Todo list items and forms
+│   └── category_ui.py     # Category management UI
+└── utils/                 # Utility functions
+    ├── __init__.py        # Makes directory a package
+    └── helpers.py         # Utility functions (retry logic, etc.)
+```
+
 ## Logic Map
 
 1. **Authentication & Connection**
@@ -28,7 +52,7 @@
 2. **Data Flow**
    - CRUD operations for todo items and categories
    - Support for parent-child relationships with subtasks
-   - Data cached for 10 minutes for performance
+   - Data cached for 5 minutes for performance
    - Retry mechanism with exponential backoff for API operations
 
 3. **UI Components**
@@ -61,22 +85,27 @@
 
 ## Design Decisions
 
-1. **Firestore vs Google Sheets**
+1. **Modular Structure**
+   - Code is organized into logical modules for better maintainability
+   - Each module has a clear responsibility and purpose
+   - Imports are explicit to show dependencies between modules
+
+2. **Firestore vs Google Sheets**
    - Firestore provides better scalability and performance
    - Document-based structure is more suitable for todo items
    - No need to manage API quotas and rate limits as with Google Sheets
 
-2. **Caching Strategy**
+3. **Caching Strategy**
    - Firebase app and Firestore client are cached as resources (persist across reruns)
-   - Todo data and categories are cached for 10 minutes to reduce database reads
+   - Todo data and categories are cached for 5 minutes to reduce database reads
    - Cache is cleared after write operations to ensure data freshness
 
-3. **Error Handling**
+4. **Error Handling**
    - Retry mechanism with exponential backoff for transient errors
    - Detailed error messages displayed to users
    - Fallback to empty DataFrame if data loading fails
 
-4. **UI/UX Considerations**
+5. **UI/UX Considerations**
    - Card-based layout with visual priority and category indicators
    - Tasks grouped by priority and category for better organization
    - Subtasks visually connected to parent tasks with indentation and connecting lines
@@ -84,7 +113,7 @@
    - Responsive design with appropriate spacing and visual hierarchy
    - Category management with color coding and easy editing
 
-5. **Subtask Implementation**
+6. **Subtask Implementation**
    - Parent-child relationships tracked with parent_id field
    - Nesting level tracked to support potential multi-level nesting
    - Visual indentation and connecting lines for subtasks
@@ -114,3 +143,4 @@
    - Set up CI/CD pipeline
    - Configure proper security rules in Firestore
    - Add backup and restore functionality for categories 
+""" 
