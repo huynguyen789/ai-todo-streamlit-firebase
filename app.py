@@ -63,7 +63,8 @@ def retry_with_backoff(retries=3, backoff_in_seconds=1):
                     if x == retries:
                         raise e
                     sleep_time = (backoff_in_seconds * 2 ** x) + (random.random() * 0.1)
-                    time.sleep(sleep_time)
+                    # Reduce sleep time for faster retries while maintaining exponential backoff
+                    time.sleep(sleep_time / 2)
                     x += 1
         return wrapper
     return decorator
@@ -120,7 +121,7 @@ def get_firestore_db():
     # Return Firestore client
     return firestore.client()
 
-@retry_with_backoff(retries=3)
+@retry_with_backoff(retries=2, backoff_in_seconds=0.5)
 def initialize_collection():
     """
     Input: None
@@ -134,7 +135,7 @@ def initialize_collection():
     # Just check if we can access the collection
     todos_ref.limit(1).get()
 
-@retry_with_backoff(retries=3)
+@retry_with_backoff(retries=2, backoff_in_seconds=0.5)
 def initialize_categories():
     """
     Input: None
@@ -161,7 +162,7 @@ def initialize_categories():
         st.error(f"Error initializing categories: {str(e)}")
         raise
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def load_categories():
     """
     Input: None
@@ -264,7 +265,7 @@ def delete_category(doc_id):
         st.error(f"Error deleting category: {str(e)}")
         raise
 
-@st.cache_data(ttl=600)  # Cache data for 10 minutes
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
 def load_data():
     """
     Input: None
@@ -796,6 +797,14 @@ st.title("✅ Todo List")
 if 'show_completed' not in st.session_state:
     st.session_state.show_completed = True
 
+# Initialize rerun flag to avoid unnecessary reruns
+if 'needs_rerun' not in st.session_state:
+    st.session_state.needs_rerun = False
+
+# Function to set rerun flag instead of immediate rerun
+def set_rerun_flag():
+    st.session_state.needs_rerun = True
+
 # Hide completed tasks toggle - moved from sidebar to main page
 show_completed = st.toggle(
     "Show/Hide Completed Tasks",
@@ -832,6 +841,7 @@ with col1:
 with col2:
     if st.button("⚙️ Manage Categories", use_container_width=True):
         st.session_state.show_category_manager = True
+        set_rerun_flag()
 
 # Category Management UI
 if st.session_state.get('show_category_manager', False):
@@ -874,12 +884,11 @@ if st.session_state.get('show_category_manager', False):
                     if new_cat_name:
                         add_category(new_cat_name, new_cat_color)
                         st.success(f"Category '{new_cat_name}' added!")
-                        time.sleep(0.5)
-                        st.rerun()
+                        set_rerun_flag()
             with col2:
                 if st.form_submit_button("Close Manager", use_container_width=True):
                     st.session_state.show_category_manager = False
-                    st.rerun()
+                    set_rerun_flag()
         
         # List existing categories
         st.subheader("Existing Categories")
@@ -902,8 +911,7 @@ if st.session_state.get('show_category_manager', False):
                         delete_category(category['id'])
                         st.success(f"Category '{category['name']}' deleted!")
                         st.session_state.confirm_delete = None
-                        time.sleep(0.5)
-                        st.rerun()
+                        set_rerun_flag()
                     else:
                         st.session_state.confirm_delete = category['id']
                         st.warning(f"Click again to confirm deleting '{category['name']}'")
@@ -933,12 +941,11 @@ if st.session_state.get('show_category_manager', False):
                         )
                         del st.session_state.editing_category
                         st.success("Category updated!")
-                        time.sleep(0.5)
-                        st.rerun()
+                        set_rerun_flag()
                 with col2:
                     if st.form_submit_button("Cancel", use_container_width=True):
                         del st.session_state.editing_category
-                        st.rerun()
+                        set_rerun_flag()
 
 # Add a horizontal line for visual separation
 st.markdown("---")
@@ -1072,8 +1079,7 @@ with st.expander("➕ Add New Task", expanded=False):
             try:
                 add_todo(new_todo, new_score, new_category)
                 st.success("Task added successfully!")
-                time.sleep(1)  # Add delay for UI feedback
-                st.rerun()
+                set_rerun_flag()
             except Exception as e:
                 st.error(f"Failed to add task: {str(e)}")
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1113,30 +1119,56 @@ if not df.empty:
                     'subtasks': subtasks
                 }
         
-        st.rerun()
+        set_rerun_flag()
         
-    # Function to complete all subtasks
+    # Batch operations for better performance
+    @retry_with_backoff(retries=2, backoff_in_seconds=0.5)
     def complete_all_subtasks(parent_id):
-        subtasks = df[df['parent_id'] == parent_id]
-        for _, subtask in subtasks.iterrows():
-            update_todo(
-                subtask['id'],
-                subtask['task'],
-                'completed',
-                subtask['score'],
-                subtask['category_id']
-            )
-        st.success("All subtasks marked as completed!")
-        time.sleep(0.5)
-        st.session_state.confirm_complete_subtasks = None
-        st.rerun()
+        """
+        Input: parent_id
+        Process: Completes all subtasks of a parent task in a batch
+        Output: None
+        """
+        try:
+            db = get_firestore_db()
+            batch = db.batch()
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Find all subtasks
+            subtasks_ref = db.collection('todos').where('parent_id', '==', parent_id)
+            subtasks = subtasks_ref.stream()
+            
+            # Update all in a batch
+            for subtask in subtasks:
+                subtask_ref = db.collection('todos').document(subtask.id)
+                batch.update(subtask_ref, {
+                    'status': 'completed',
+                    'updated_at': now
+                })
+            
+            # Commit the batch
+            batch.commit()
+            
+            # Clear cache
+            st.cache_data.clear()
+            
+            st.success("All subtasks marked as completed!")
+            st.session_state.confirm_complete_subtasks = None
+            set_rerun_flag()
+            
+        except Exception as e:
+            st.error(f"Error completing subtasks: {str(e)}")
+            raise
+
+    # Function to complete all subtasks - replace with call to batch function
+    def complete_all_subtasks_handler(parent_id):
+        complete_all_subtasks(parent_id)
         
     # Function to delete a task
     def delete_task(task_id):
         delete_todo(task_id)
         st.success("Task deleted!")
-        time.sleep(0.5)
-        st.rerun()
+        set_rerun_flag()
     
     # Display all tasks in a clean list
     # First, sort by position and then organize by parent-child relationship
@@ -1144,7 +1176,7 @@ if not df.empty:
     
     # Create a dictionary to track processed tasks to avoid duplicates
     processed_tasks = set()
-    
+
     # Function to display a task and its subtasks recursively
     def display_task_with_subtasks(task_row, is_subtask=False):
         task_id = task_row['id']
@@ -1224,19 +1256,19 @@ if not df.empty:
             with col5:
                 if st.button("↑", key=f"up_{task_id}", help="Move task up"):
                     move_todo_up(task_id, int(position), df)
-                    st.rerun()
+                    set_rerun_flag()
             
             # Add move down button
             with col6:
                 if st.button("↓", key=f"down_{task_id}", help="Move task down"):
                     move_todo_down(task_id, int(position), df)
-                    st.rerun()
+                    set_rerun_flag()
                     
             # Add subtask button (only for main tasks)
             with col7:
                 if not is_subtask and st.button("+", key=f"subtask_{task_id}", help="Add subtask"):
                     st.session_state.adding_subtask = task_id
-                    st.rerun()
+                    set_rerun_flag()
         
         # Display subtasks if any
         if not is_subtask:  # Only look for subtasks of main tasks
@@ -1260,11 +1292,11 @@ if not df.empty:
         col1, col2 = st.columns(2)
         with col1:
             if st.button("Yes, complete all subtasks"):
-                complete_all_subtasks(parent_id)
+                complete_all_subtasks_handler(parent_id)
         with col2:
             if st.button("No, keep subtasks as is"):
                 st.session_state.confirm_complete_subtasks = None
-                st.rerun()
+                set_rerun_flag()
         
     # Show edit form if a task is being edited
     if st.session_state.editing_task:
@@ -1315,13 +1347,12 @@ if not df.empty:
                     )
                     st.session_state.editing_task = None
                     st.success("Task updated!")
-                    time.sleep(0.5)
-                    st.rerun()
+                    set_rerun_flag()
             
             with col2:
                 if st.form_submit_button("Cancel"):
                     st.session_state.editing_task = None
-                    st.rerun()
+                    set_rerun_flag()
         
     # Show subtask form if adding a subtask
     if 'adding_subtask' in st.session_state and st.session_state.adding_subtask:
@@ -1348,15 +1379,24 @@ if not df.empty:
                             add_subtask(parent_id, subtask_text, subtask_score)
                             st.session_state.adding_subtask = None
                             st.success("Subtask added!")
-                            time.sleep(0.5)
-                            st.rerun()
+                            set_rerun_flag()
                 
                 with col2:
                     if st.form_submit_button("Cancel"):
                         st.session_state.adding_subtask = None
-                        st.rerun()
+                        set_rerun_flag()
 else:
     st.info("No tasks yet! Add your first task above.")
 
-# # Cache info at the bottom
-# st.info("ℹ️ Data is cached for 10 minutes") 
+# Perform a single rerun at the end if needed
+if st.session_state.needs_rerun:
+    st.session_state.needs_rerun = False
+    st.rerun()
+
+# Add a footer with cache info
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #888; font-size: 0.8em; padding: 10px;">
+    ℹ️ Data is cached for 5 minutes for better performance
+</div>
+""", unsafe_allow_html=True) 
