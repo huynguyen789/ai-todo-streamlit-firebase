@@ -685,6 +685,41 @@ st.markdown("""
     .stButton > button:hover {
         border-color: rgba(255, 255, 255, 0.5) !important;
     }
+    
+    /* Inline edit form styling */
+    .inline-edit-form {
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Make form inputs in inline edit more compact */
+    .inline-edit-form [data-testid="stForm"] {
+        padding: 0;
+        background-color: transparent;
+    }
+    
+    .inline-edit-form .stTextInput input {
+        font-size: 1rem;
+    }
+    
+    .inline-edit-form .stSelectbox {
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Reduce spacing in inline edit form */
+    .inline-edit-form .block-container {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    
+    /* Make form buttons more prominent */
+    .inline-edit-form .stButton > button {
+        width: 100%;
+        font-weight: 500;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -978,13 +1013,9 @@ if not df.empty:
     if selected_category != 'all':
         df = df[df['category_id'] == selected_category]
     
-    # Store task edit states
-    if 'edit_states' not in st.session_state:
-        st.session_state.edit_states = {}
-        
-    # Store the task being edited
-    if 'editing_task' not in st.session_state:
-        st.session_state.editing_task = None
+    # Initialize editing_tasks dictionary if it doesn't exist
+    if 'editing_tasks' not in st.session_state:
+        st.session_state.editing_tasks = {}
         
     # Function to toggle task completion status
     def toggle_status(task_id, current_status, task_text, score, category_id):
@@ -1021,115 +1052,115 @@ if not df.empty:
         # Create a container for each task
         task_container = st.container()
         
-        # Create columns for task display and actions
         with task_container:
-            # Create columns for the task and action buttons
-            col1, col2, col3, col4, col5, col6 = st.columns([20, 1, 1, 1, 1, 1])
-            
-            with col1:
-                # Task item with category indicator
-                st.markdown(f"""
-                <div class="task-item" id="task-{task_id}">
-                    <div class="priority-dot" style="background-color: {dot_color};"></div>
-                    <div style="display: flex; flex-direction: column; flex-grow: 1;">
-                        <p class="task-text {task_class}" style="margin-bottom: 2px;">{row['task']}</p>
-                        <div style="display: flex; align-items: center;">
-                            <div style="width: 8px; height: 8px; border-radius: 50%; background-color: {category_color}; margin-right: 5px;"></div>
-                            <span style="font-size: 0.8em; color: rgba(255,255,255,0.6);">{category_name}</span>
+            # Check if this task is being edited
+            if task_id in st.session_state.editing_tasks:
+                # Display inline edit form
+                st.markdown('<div class="inline-edit-form">', unsafe_allow_html=True)
+                with st.form(key=f"inline_edit_form_{task_id}"):
+                    edit_task = st.text_input("Task", value=row['task'], key=f"edit_task_{task_id}")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        edit_status = st.checkbox(
+                            "Completed", 
+                            value=True if task_status == 'completed' else False,
+                            key=f"edit_status_{task_id}"
+                        )
+                        edit_status_value = "completed" if edit_status else "pending"
+                    
+                    with col2:
+                        edit_score = st.selectbox(
+                            "Priority",
+                            options=list(SCORE_OPTIONS.keys()),
+                            format_func=lambda x: SCORE_OPTIONS[x],
+                            index=list(SCORE_OPTIONS.keys()).index(priority_int) 
+                                if priority_int in SCORE_OPTIONS.keys() else 0,
+                            key=f"edit_score_{task_id}"
+                        )
+                    
+                    with col3:
+                        edit_category = st.selectbox(
+                            "Category",
+                            options=[cat['id'] for _, cat in categories_df.iterrows()],
+                            format_func=lambda x: category_options[x],
+                            index=list(categories_df['id']).index(category_id)
+                                if category_id in list(categories_df['id']) else 0,
+                            key=f"edit_category_{task_id}"
+                        )
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.form_submit_button("Update", use_container_width=True):
+                            update_todo(
+                                task_id, 
+                                edit_task, 
+                                edit_status_value, 
+                                edit_score,
+                                edit_category
+                            )
+                            # Remove task from editing state
+                            del st.session_state.editing_tasks[task_id]
+                            st.success("Task updated!")
+                            time.sleep(0.5)
+                            st.rerun()
+                    
+                    with col2:
+                        if st.form_submit_button("Cancel", use_container_width=True):
+                            # Remove task from editing state
+                            del st.session_state.editing_tasks[task_id]
+                            st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                # Display normal task view
+                # Create columns for the task and action buttons
+                col1, col2, col3, col4, col5, col6 = st.columns([20, 1, 1, 1, 1, 1])
+                
+                with col1:
+                    # Task item with category indicator
+                    st.markdown(f"""
+                    <div class="task-item" id="task-{task_id}">
+                        <div class="priority-dot" style="background-color: {dot_color};"></div>
+                        <div style="display: flex; flex-direction: column; flex-grow: 1;">
+                            <p class="task-text {task_class}" style="margin-bottom: 2px;">{row['task']}</p>
+                            <div style="display: flex; align-items: center;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background-color: {category_color}; margin-right: 5px;"></div>
+                                <span style="font-size: 0.8em; color: rgba(255,255,255,0.6);">{category_name}</span>
+                            </div>
                         </div>
+                        <span class="priority-emoji">{SCORE_OPTIONS.get(priority_int, "⚪ Unknown").split()[0]}</span>
                     </div>
-                    <span class="priority-emoji">{SCORE_OPTIONS.get(priority_int, "⚪ Unknown").split()[0]}</span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Action buttons as actual Streamlit buttons
-            with col2:
-                if st.button("✓", key=f"complete_{idx}", help=f"Mark as {'pending' if task_status == 'completed' else 'completed'}"):
-                    toggle_status(task_id, task_status, row['task'], priority_int, category_id)
-            
-            with col3:
-                # Set the editing task and show edit form
-                if st.button("✎", key=f"edit_{idx}", help="Edit task"):
-                    # Store current values in session state for editing
-                    st.session_state.editing_task = {
-                        'id': task_id,
-                        'task': row['task'],
-                        'status': task_status,
-                        'score': priority_int,
-                        'category_id': category_id
-                    }
-                    st.rerun()
-            
-            with col4:
-                if st.button("🗑", key=f"delete_{idx}", help="Delete task"):
-                    delete_task(task_id)
-            
-            # Add move up button
-            with col5:
-                if st.button("↑", key=f"up_{idx}", help="Move task up"):
-                    move_todo_up(task_id, int(position), df)
-                    st.rerun()
-            
-            # Add move down button
-            with col6:
-                if st.button("↓", key=f"down_{idx}", help="Move task down"):
-                    move_todo_down(task_id, int(position), df)
-                    st.rerun()
-        
-    # Show edit form if a task is being edited
-    if st.session_state.editing_task:
-        with st.form(key="edit_task_form"):
-            st.subheader("Edit Task")
-            
-            edit_task = st.text_input("Task", value=st.session_state.editing_task['task'])
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                edit_status = st.checkbox(
-                    "Completed", 
-                    value=True if st.session_state.editing_task['status'] == 'completed' else False
-                )
-                edit_status_value = "completed" if edit_status else "pending"
-            
-            with col2:
-                edit_score = st.selectbox(
-                    "Priority",
-                    options=list(SCORE_OPTIONS.keys()),
-                    format_func=lambda x: SCORE_OPTIONS[x],
-                    index=list(SCORE_OPTIONS.keys()).index(st.session_state.editing_task['score']) 
-                        if st.session_state.editing_task['score'] in SCORE_OPTIONS.keys() else 0
-                )
-            
-            with col3:
-                edit_category = st.selectbox(
-                    "Category",
-                    options=[cat['id'] for _, cat in categories_df.iterrows()],
-                    format_func=lambda x: category_options[x],
-                    index=list(categories_df['id']).index(st.session_state.editing_task['category_id'])
-                        if st.session_state.editing_task['category_id'] in list(categories_df['id']) else 0
-                )
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.form_submit_button("Update"):
-                    update_todo(
-                        st.session_state.editing_task['id'], 
-                        edit_task, 
-                        edit_status_value, 
-                        edit_score,
-                        edit_category
-                    )
-                    st.session_state.editing_task = None
-                    st.success("Task updated!")
-                    time.sleep(0.5)
-                    st.rerun()
-            
-            with col2:
-                if st.form_submit_button("Cancel"):
-                    st.session_state.editing_task = None
-                    st.rerun()
+                    """, unsafe_allow_html=True)
+                
+                # Action buttons as actual Streamlit buttons
+                with col2:
+                    if st.button("✓", key=f"complete_{idx}", help=f"Mark as {'pending' if task_status == 'completed' else 'completed'}"):
+                        toggle_status(task_id, task_status, row['task'], priority_int, category_id)
+                
+                with col3:
+                    # Set the task to editing mode
+                    if st.button("✎", key=f"edit_{idx}", help="Edit task"):
+                        # Add this task to the editing tasks dictionary
+                        st.session_state.editing_tasks[task_id] = True
+                        st.rerun()
+                
+                with col4:
+                    if st.button("🗑", key=f"delete_{idx}", help="Delete task"):
+                        delete_task(task_id)
+                
+                # Add move up button
+                with col5:
+                    if st.button("↑", key=f"up_{idx}", help="Move task up"):
+                        move_todo_up(task_id, int(position), df)
+                        st.rerun()
+                
+                # Add move down button
+                with col6:
+                    if st.button("↓", key=f"down_{idx}", help="Move task down"):
+                        move_todo_down(task_id, int(position), df)
+                        st.rerun()
 else:
     st.info("No tasks yet! Add your first task above.")
 
