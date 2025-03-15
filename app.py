@@ -787,6 +787,116 @@ st.markdown("""
     .subtask .task-text {
         font-size: 0.95rem;
     }
+    
+    /* Inline edit form styling */
+    .inline-edit-form {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-left: 3px solid #4CAF50;
+    }
+    
+    /* Make form inputs more compact */
+    .inline-edit-form [data-testid="stForm"] {
+        padding: 0.5rem !important;
+    }
+    
+    .inline-edit-form .stTextInput input {
+        padding: 0.5rem !important;
+    }
+    
+    .inline-edit-form .stButton button {
+        padding: 0.3rem 1rem !important;
+    }
+    
+    /* Improve form spacing */
+    .inline-edit-form .row-widget {
+        margin-bottom: 0.5rem !important;
+    }
+    
+    /* Inline subtask form styling */
+    .inline-subtask-form {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-left: 3px solid #45B7D1;  /* Sky blue border */
+    }
+    
+    /* Make subtask form inputs more compact */
+    .inline-subtask-form [data-testid="stForm"] {
+        padding: 0.5rem !important;
+    }
+    
+    .inline-subtask-form .stTextInput input {
+        padding: 0.5rem !important;
+    }
+    
+    .inline-subtask-form .stButton button {
+        padding: 0.3rem 1rem !important;
+    }
+    
+    /* Better button icons */
+    .icon-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+    }
+    
+    /* Button tooltips */
+    button[data-testid="baseButton-secondary"]:hover::after {
+        content: attr(aria-label);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        z-index: 1000;
+        pointer-events: none;
+    }
+    
+    /* Action buttons styling */
+    .action-button {
+        border-radius: 4px !important;
+        min-width: 30px !important;
+        height: 30px !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    .action-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Action button container */
+    .action-button-container button {
+        border-radius: 4px !important;
+        min-width: 30px !important;
+        height: 30px !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.2s ease !important;
+        background-color: rgba(255, 255, 255, 0.05) !important;
+    }
+    
+    .action-button-container button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        background-color: rgba(255, 255, 255, 0.1) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1206,69 +1316,169 @@ if not df.empty:
         # Create a container for each task
         task_container = st.container()
         
+        # Check if this task is being edited
+        is_editing = st.session_state.editing_task and st.session_state.editing_task['id'] == task_id
+        
         # Create columns for task display and actions
         with task_container:
-            # Create columns for the task and action buttons
-            col1, col2, col3, col4, col5, col6, col7 = st.columns([20, 1, 1, 1, 1, 1, 1])
-            
-            with col1:
-                # Task item with category indicator
-                subtask_class = "subtask" if is_subtask else ""
-                st.markdown(f"""
-                <div class="task-item {subtask_class}" id="task-{task_id}">
-                    <div class="priority-dot" style="background-color: {dot_color};"></div>
-                    <div style="display: flex; flex-direction: column; flex-grow: 1;">
-                        <p class="task-text {task_class}" style="margin-bottom: 2px;">{task_row['task']}</p>
-                        <div style="display: flex; align-items: center;">
-                            <div style="width: 8px; height: 8px; border-radius: 50%; background-color: {category_color}; margin-right: 5px;"></div>
-                            <span style="font-size: 0.8em; color: rgba(255,255,255,0.6);">{category_name}</span>
-                        </div>
-                    </div>
-                    <span class="priority-emoji">{SCORE_OPTIONS.get(priority_int, "⚪ Unknown").split()[0]}</span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Action buttons as actual Streamlit buttons
-            with col2:
-                if st.button("✓", key=f"complete_{task_id}", help=f"Mark as {'pending' if task_status == 'completed' else 'completed'}"):
-                    toggle_status(task_id, task_status, task_row['task'], priority_int, category_id)
-            
-            with col3:
-                # Set the editing task and show edit form
-                if st.button("✎", key=f"edit_{task_id}", help="Edit task"):
-                    # Store current values in session state for editing
-                    st.session_state.editing_task = {
-                        'id': task_id,
-                        'task': task_row['task'],
-                        'status': task_status,
-                        'score': priority_int,
-                        'category_id': category_id,
-                        'parent_id': task_row.get('parent_id'),
-                        'level': task_row.get('level', 0)
-                    }
-                    st.rerun()
-            
-            with col4:
-                if st.button("🗑", key=f"delete_{task_id}", help="Delete task"):
-                    delete_task(task_id)
-            
-            # Add move up button
-            with col5:
-                if st.button("↑", key=f"up_{task_id}", help="Move task up"):
-                    move_todo_up(task_id, int(position), df)
-                    set_rerun_flag()
-            
-            # Add move down button
-            with col6:
-                if st.button("↓", key=f"down_{task_id}", help="Move task down"):
-                    move_todo_down(task_id, int(position), df)
-                    set_rerun_flag()
+            # If task is being edited, show inline edit form
+            if is_editing:
+                st.markdown('<div class="inline-edit-form">', unsafe_allow_html=True)
+                with st.form(key=f"edit_task_form_{task_id}"):
+                    edit_task = st.text_input("Task", value=task_row['task'])
                     
-            # Add subtask button (only for main tasks)
-            with col7:
-                if not is_subtask and st.button("+", key=f"subtask_{task_id}", help="Add subtask"):
-                    st.session_state.adding_subtask = task_id
-                    set_rerun_flag()
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        edit_status = st.checkbox(
+                            "Completed", 
+                            value=True if task_status == 'completed' else False
+                        )
+                        edit_status_value = "completed" if edit_status else "pending"
+                    
+                    with col2:
+                        edit_score = st.selectbox(
+                            "Priority",
+                            options=list(SCORE_OPTIONS.keys()),
+                            format_func=lambda x: SCORE_OPTIONS[x],
+                            index=list(SCORE_OPTIONS.keys()).index(priority_int) 
+                                if priority_int in SCORE_OPTIONS.keys() else 0
+                        )
+                    
+                    with col3:
+                        edit_category = st.selectbox(
+                            "Category",
+                            options=[cat['id'] for _, cat in categories_df.iterrows()],
+                            format_func=lambda x: category_options[x],
+                            index=list(categories_df['id']).index(category_id)
+                                if category_id in list(categories_df['id']) else 0
+                        )
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.form_submit_button("Update"):
+                            update_todo(
+                                task_id, 
+                                edit_task, 
+                                edit_status_value, 
+                                edit_score,
+                                edit_category,
+                                task_row.get('parent_id'),
+                                task_row.get('level', 0)
+                            )
+                            st.session_state.editing_task = None
+                            st.success("Task updated!")
+                            set_rerun_flag()
+                    
+                    with col2:
+                        if st.form_submit_button("Cancel"):
+                            st.session_state.editing_task = None
+                            set_rerun_flag()
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                # Create columns for the task and action buttons
+                col1, col2, col3, col4, col5, col6, col7 = st.columns([20, 1, 1, 1, 1, 1, 1])
+                
+                with col1:
+                    # Task item with category indicator
+                    subtask_class = "subtask" if is_subtask else ""
+                    st.markdown(f"""
+                    <div class="task-item {subtask_class}" id="task-{task_id}">
+                        <div class="priority-dot" style="background-color: {dot_color};"></div>
+                        <div style="display: flex; flex-direction: column; flex-grow: 1;">
+                            <p class="task-text {task_class}" style="margin-bottom: 2px;">{task_row['task']}</p>
+                            <div style="display: flex; align-items: center;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background-color: {category_color}; margin-right: 5px;"></div>
+                                <span style="font-size: 0.8em; color: rgba(255,255,255,0.6);">{category_name}</span>
+                            </div>
+                        </div>
+                        <span class="priority-emoji">{SCORE_OPTIONS.get(priority_int, "⚪ Unknown").split()[0]}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Action buttons as actual Streamlit buttons
+                with col2:
+                    st.markdown('<div class="action-button-container">', unsafe_allow_html=True)
+                    if st.button("✓", key=f"complete_{task_id}", help=f"Mark as {'pending' if task_status == 'completed' else 'completed'}", type="secondary"):
+                        toggle_status(task_id, task_status, task_row['task'], priority_int, category_id)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                with col3:
+                    # Set the editing task and show edit form
+                    st.markdown('<div class="action-button-container">', unsafe_allow_html=True)
+                    if st.button("✏️", key=f"edit_{task_id}", help="Edit task", type="secondary"):
+                        # Store current values in session state for editing
+                        st.session_state.editing_task = {
+                            'id': task_id,
+                            'task': task_row['task'],
+                            'status': task_status,
+                            'score': priority_int,
+                            'category_id': category_id,
+                            'parent_id': task_row.get('parent_id'),
+                            'level': task_row.get('level', 0)
+                        }
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                with col4:
+                    st.markdown('<div class="action-button-container">', unsafe_allow_html=True)
+                    if st.button("🗑️", key=f"delete_{task_id}", help="Delete task", type="secondary"):
+                        delete_task(task_id)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Add move up button
+                with col5:
+                    st.markdown('<div class="action-button-container">', unsafe_allow_html=True)
+                    if st.button("⬆️", key=f"up_{task_id}", help="Move task up", type="secondary"):
+                        move_todo_up(task_id, int(position), df)
+                        set_rerun_flag()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Add move down button
+                with col6:
+                    st.markdown('<div class="action-button-container">', unsafe_allow_html=True)
+                    if st.button("⬇️", key=f"down_{task_id}", help="Move task down", type="secondary"):
+                        move_todo_down(task_id, int(position), df)
+                        set_rerun_flag()
+                    
+                # Add subtask button (only for main tasks)
+                with col7:
+                    st.markdown('<div class="action-button-container">', unsafe_allow_html=True)
+                    if not is_subtask and st.button("➕", key=f"subtask_{task_id}", help="Add subtask", type="secondary"):
+                        st.session_state.adding_subtask = task_id
+                        set_rerun_flag()
+                    st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Display subtask form if adding a subtask to this task
+        if 'adding_subtask' in st.session_state and st.session_state.adding_subtask == task_id:
+            st.markdown('<div class="inline-subtask-form">', unsafe_allow_html=True)
+            with st.form(key=f"add_subtask_form_{task_id}"):
+                st.subheader(f"Add Subtask to: {task_row['task']}")
+                
+                subtask_text = st.text_input("Subtask Description")
+                subtask_score = st.selectbox(
+                    "Priority",
+                    options=list(SCORE_OPTIONS.keys()),
+                    format_func=lambda x: SCORE_OPTIONS[x],
+                    key=f"subtask_score_{task_id}"
+                )
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.form_submit_button("Add Subtask"):
+                        if subtask_text:
+                            add_subtask(task_id, subtask_text, subtask_score)
+                            st.session_state.adding_subtask = None
+                            st.success("Subtask added!")
+                            set_rerun_flag()
+                
+                with col2:
+                    if st.form_submit_button("Cancel"):
+                        st.session_state.adding_subtask = None
+                        set_rerun_flag()
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # Display subtasks if any
         if not is_subtask:  # Only look for subtasks of main tasks
@@ -1297,94 +1507,8 @@ if not df.empty:
             if st.button("No, keep subtasks as is"):
                 st.session_state.confirm_complete_subtasks = None
                 set_rerun_flag()
-        
-    # Show edit form if a task is being edited
-    if st.session_state.editing_task:
-        with st.form(key="edit_task_form"):
-            st.subheader("Edit Task")
-            
-            edit_task = st.text_input("Task", value=st.session_state.editing_task['task'])
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                edit_status = st.checkbox(
-                    "Completed", 
-                    value=True if st.session_state.editing_task['status'] == 'completed' else False
-                )
-                edit_status_value = "completed" if edit_status else "pending"
-            
-            with col2:
-                edit_score = st.selectbox(
-                    "Priority",
-                    options=list(SCORE_OPTIONS.keys()),
-                    format_func=lambda x: SCORE_OPTIONS[x],
-                    index=list(SCORE_OPTIONS.keys()).index(st.session_state.editing_task['score']) 
-                        if st.session_state.editing_task['score'] in SCORE_OPTIONS.keys() else 0
-                )
-            
-            with col3:
-                edit_category = st.selectbox(
-                    "Category",
-                    options=[cat['id'] for _, cat in categories_df.iterrows()],
-                    format_func=lambda x: category_options[x],
-                    index=list(categories_df['id']).index(st.session_state.editing_task['category_id'])
-                        if st.session_state.editing_task['category_id'] in list(categories_df['id']) else 0
-                )
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.form_submit_button("Update"):
-                    update_todo(
-                        st.session_state.editing_task['id'], 
-                        edit_task, 
-                        edit_status_value, 
-                        edit_score,
-                        edit_category,
-                        st.session_state.editing_task.get('parent_id'),
-                        st.session_state.editing_task.get('level')
-                    )
-                    st.session_state.editing_task = None
-                    st.success("Task updated!")
-                    set_rerun_flag()
-            
-            with col2:
-                if st.form_submit_button("Cancel"):
-                    st.session_state.editing_task = None
-                    set_rerun_flag()
-        
-    # Show subtask form if adding a subtask
-    if 'adding_subtask' in st.session_state and st.session_state.adding_subtask:
-        parent_id = st.session_state.adding_subtask
-        parent_task = df[df['id'] == parent_id].iloc[0] if not df[df['id'] == parent_id].empty else None
-        
-        if parent_task is not None:
-            with st.form(key="add_subtask_form"):
-                st.subheader(f"Add Subtask to: {parent_task['task']}")
-                
-                subtask_text = st.text_input("Subtask Description")
-                subtask_score = st.selectbox(
-                    "Priority",
-                    options=list(SCORE_OPTIONS.keys()),
-                    format_func=lambda x: SCORE_OPTIONS[x],
-                    key="subtask_score"
-                )
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if st.form_submit_button("Add Subtask"):
-                        if subtask_text:
-                            add_subtask(parent_id, subtask_text, subtask_score)
-                            st.session_state.adding_subtask = None
-                            st.success("Subtask added!")
-                            set_rerun_flag()
-                
-                with col2:
-                    if st.form_submit_button("Cancel"):
-                        st.session_state.adding_subtask = None
-                        set_rerun_flag()
+    
+    # Remove the global subtask form since we now have inline subtask forms
 else:
     st.info("No tasks yet! Add your first task above.")
 
