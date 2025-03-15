@@ -27,11 +27,13 @@
 
 2. **Data Flow**
    - CRUD operations for todo items and categories
+   - Support for parent-child relationships with subtasks
    - Data cached for 10 minutes for performance
    - Retry mechanism with exponential backoff for API operations
 
 3. **UI Components**
    - Add task form with priority and category selection
+   - Subtask creation with visual indentation and parent-child relationships
    - Category management interface
    - Task cards grouped by priority and category
    - Statistics in sidebar (progress, priority distribution, status summary)
@@ -45,6 +47,8 @@
 - `status`: String ('pending' or 'completed')
 - `score`: Number (10, 7, 5, or 2 for priority)
 - `category_id`: String (reference to category)
+- `parent_id`: String (reference to parent task, null for main tasks)
+- `level`: Number (nesting level, 0 for main tasks, 1+ for subtasks)
 - `created_at`: Timestamp
 - `updated_at`: Timestamp
 
@@ -75,9 +79,18 @@
 4. **UI/UX Considerations**
    - Card-based layout with visual priority and category indicators
    - Tasks grouped by priority and category for better organization
+   - Subtasks visually connected to parent tasks with indentation and connecting lines
    - Progress indicators and statistics for better task management
    - Responsive design with appropriate spacing and visual hierarchy
    - Category management with color coding and easy editing
+
+5. **Subtask Implementation**
+   - Parent-child relationships tracked with parent_id field
+   - Nesting level tracked to support potential multi-level nesting
+   - Visual indentation and connecting lines for subtasks
+   - Option to complete all subtasks when parent is completed
+   - Subtasks inherit category from parent task
+   - Deleting a parent task also deletes all its subtasks
 
 ## Potential Improvements
 
@@ -90,6 +103,7 @@
    - Implement task tags within categories
    - Add search and advanced filtering capabilities
    - Add category-specific statistics and insights
+   - Support for deeper nesting levels (sub-subtasks)
 
 3. **Performance**
    - Implement pagination for large todo lists
