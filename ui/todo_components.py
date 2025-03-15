@@ -33,7 +33,7 @@ def display_add_todo_form(categories_df):
             score = st.selectbox(
                 "Priority",
                 options=[10, 7, 5, 2],
-                format_func=lambda x: SCORE_OPTIONS[x].split(" ")[0],  # Just show the emoji and importance
+                format_func=lambda x: SCORE_OPTIONS[x],  # Show the full priority description
                 key="new_score"
             )
         
@@ -135,7 +135,7 @@ def display_task(task, df, category_lookup, categories_df, level=0):
                         edited_score = st.selectbox(
                             "Priority",
                             options=[10, 7, 5, 2],
-                            format_func=lambda x: SCORE_OPTIONS[x].split(" ")[0],
+                            format_func=lambda x: SCORE_OPTIONS[x],  # Show the full priority description
                             index=[10, 7, 5, 2].index(score),
                             key=f"edit_score_{task_id}"
                         )
@@ -180,7 +180,7 @@ def display_task(task, df, category_lookup, categories_df, level=0):
                         subtask_score = st.selectbox(
                             "Priority",
                             options=[10, 7, 5, 2],
-                            format_func=lambda x: SCORE_OPTIONS[x].split(" ")[0],
+                            format_func=lambda x: SCORE_OPTIONS[x],  # Show the full priority description
                             index=[10, 7, 5, 2].index(score),  # Default to parent's score
                             key=f"subtask_score_{task_id}"
                         )
