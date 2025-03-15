@@ -50,7 +50,7 @@ try:
         st.session_state.new_category = 'work'
     
     # Top controls in a single row
-    col1, col2 = st.columns([1, 3])
+    col1, col2, col3 = st.columns([1, 1, 2])
     
     with col1:
         # Category selection
@@ -64,6 +64,12 @@ try:
             key="show_completed",
             value=True
         )
+    
+    with col3:
+        # Category management toggle
+        if st.button("Manage Categories", key="toggle_category_manager"):
+            st.session_state.show_category_manager = not st.session_state.get('show_category_manager', False)
+            st.session_state.needs_rerun = True
     
     # Category Management UI (conditionally displayed)
     if st.session_state.get('show_category_manager', False):

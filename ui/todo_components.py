@@ -16,13 +16,12 @@ def display_add_todo_form(categories_df):
     Process: Renders compact form for adding new todo items
     Output: None
     """
-    st.subheader("Add New Task")
-    
     # Initialize task input in session state if not exists
     if 'new_task_input' not in st.session_state:
         st.session_state.new_task_input = ""
     
     with st.form(key="add_form", clear_on_submit=True):
+        st.markdown("### Add New Task")
         cols = st.columns([3, 1, 1, 1])
         
         # Task input
@@ -130,7 +129,7 @@ def display_task(task, df, category_lookup, categories_df, level=0):
                     cols = st.columns([3, 1, 1, 1, 1])
                     
                     with cols[0]:
-                        edited_task = st.text_input("Edit Task", value=task_text, key=f"edit_task_{task_id}")
+                        edited_task = st.text_input("Edit task", value=task_text, key=f"edit_task_{task_id}")
                     
                     with cols[1]:
                         edited_score = st.selectbox(
@@ -175,7 +174,7 @@ def display_task(task, df, category_lookup, categories_df, level=0):
                     cols = st.columns([3, 1, 1, 1])
                     
                     with cols[0]:
-                        subtask_text = st.text_input("Subtask", key=f"subtask_text_{task_id}", placeholder="Enter subtask")
+                        subtask_text = st.text_input("Enter subtask", key=f"subtask_text_{task_id}", placeholder=f"Subtask for: {task_text[:30]}{'...' if len(task_text) > 30 else ''}")
                     
                     with cols[1]:
                         subtask_score = st.selectbox(
@@ -202,16 +201,30 @@ def display_task(task, df, category_lookup, categories_df, level=0):
                         st.session_state.needs_rerun = True
         else:
             # Regular task display
+            # Add indentation for subtasks
+            indent_margin = level * 20
+            
             cols = st.columns([0.05, 2.5, 0.4, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15])
             
             # Priority dot
             with cols[0]:
-                st.markdown(f'<div class="priority-dot" style="background-color: {SCORE_COLORS[score]};"></div>', unsafe_allow_html=True)
+                if level > 0:
+                    # Add connector line for subtasks
+                    st.markdown(f"""
+                    <div style="position: relative; height: 100%;">
+                        <div style="position: absolute; left: {indent_margin-15}px; top: 0; bottom: 0; border-left: 2px solid #555; height: 100%;"></div>
+                        <div style="position: absolute; left: {indent_margin-15}px; top: 50%; width: 15px; border-top: 2px solid #555;"></div>
+                        <div class="priority-dot" style="background-color: {SCORE_COLORS[score]}; margin-left: {indent_margin}px;"></div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="priority-dot" style="background-color: {SCORE_COLORS[score]};"></div>', unsafe_allow_html=True)
             
             # Task text
             with cols[1]:
                 text_style = "text-decoration: line-through;" if status == "completed" else ""
-                st.markdown(f'<div style="{text_style}">{task_text}</div>', unsafe_allow_html=True)
+                margin_style = f"margin-left: {indent_margin}px;" if level > 0 else ""
+                st.markdown(f'<div style="{text_style} {margin_style}">{task_text}</div>', unsafe_allow_html=True)
             
             # Category badge
             with cols[2]:

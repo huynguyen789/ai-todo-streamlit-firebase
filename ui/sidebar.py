@@ -1,7 +1,6 @@
 """
 Logic:
 - Renders the sidebar with statistics and debug information
-- Provides UI for category management toggle
 """
 
 import streamlit as st
@@ -32,10 +31,10 @@ def render_sidebar(df):
             <div class="stat-card">
                 <h3>Tasks</h3>
                 <p>Total: {total_tasks} | Completed: {completed_tasks} | Pending: {pending_tasks}</p>
-                <div class="progress-bg" style="height: 10px; width: 100%;">
-                    <div class="progress-fill" style="height: 10px; width: {completion_percentage}%;"></div>
+                <div class="progress-bg" style="height: 8px; width: 100%;">
+                    <div class="progress-fill" style="height: 8px; width: {completion_percentage}%;"></div>
                 </div>
-                <p style="text-align: right; margin-top: 5px;">{completion_percentage}% complete</p>
+                <p style="text-align: right; margin-top: 4px;">{completion_percentage}% complete</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -60,7 +59,7 @@ def render_sidebar(df):
                 """, unsafe_allow_html=True)
             
             # Category distribution if available
-            if 'category_id' in df.columns:
+            if 'category_id' in df.columns and df['category_id'].nunique() > 0:
                 category_counts = df['category_id'].value_counts().to_dict()
                 
                 # Display category distribution
@@ -75,21 +74,6 @@ def render_sidebar(df):
                 st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("No tasks yet. Add some tasks to see statistics.")
-        
-        # Category management toggle
-        st.markdown("---")
-        st.markdown("### Category Management")
-        
-        # Toggle for category management
-        if st.button("Show/Hide Category Manager"):
-            st.session_state.show_category_manager = not st.session_state.get('show_category_manager', False)
-            st.session_state.needs_rerun = True
-        
-        # Show current state
-        if st.session_state.get('show_category_manager', False):
-            st.success("Category manager is visible")
-        else:
-            st.info("Category manager is hidden")
         
         # Debug information in an expander
         with st.expander("Debug Info"):

@@ -303,6 +303,39 @@ def apply_custom_css():
             min-width: 24px;
         }
         
+        /* Compact forms */
+        .compact-form {
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+        
+        /* Subtask styling */
+        .subtask-item {
+            position: relative;
+            padding-left: 20px;
+        }
+        
+        /* Subtask connector styling */
+        .subtask-line {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: #555;
+        }
+        
+        .subtask-branch {
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 15px;
+            height: 2px;
+            background-color: #555;
+        }
+        
         /* Responsive adjustments */
         @media (max-width: 768px) {
             .task-item {

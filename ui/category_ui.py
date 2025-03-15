@@ -28,8 +28,6 @@ def render_category_selector(categories_df):
     Process: Renders category selector as a dropdown
     Output: Selected category ID
     """
-    st.markdown("### Filter by Category")
-    
     # Create category options for dropdown
     category_options = {"all": "All Categories"}
     
@@ -40,7 +38,7 @@ def render_category_selector(categories_df):
     
     # Create the dropdown
     selected_category = st.selectbox(
-        "Select category",
+        "Filter by Category",
         options=list(category_options.keys()),
         format_func=lambda x: category_options[x],
         key="category_selector"
