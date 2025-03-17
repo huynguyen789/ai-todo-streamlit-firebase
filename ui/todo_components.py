@@ -45,6 +45,17 @@ def display_add_todo_form(categories_df):
         with cols[2]:
             if not categories_df.empty:
                 category_options = {row['id']: row['name'] for _, row in categories_df.iterrows()}
+                
+                # Set the default value based on the filtered category
+                default_index = 0
+                # If a specific category is selected for filtering and it exists in options,
+                # make it the default selection for new tasks
+                if st.session_state.selected_category != 'all' and st.session_state.selected_category in category_options:
+                    # If session state already has a value for new_category, we shouldn't override it
+                    # unless we're first loading this form with a filtered category
+                    if st.session_state.get('new_category') != st.session_state.selected_category:
+                        st.session_state.new_category = st.session_state.selected_category
+                
                 category_id = st.selectbox(
                     "Category",
                     options=list(category_options.keys()),
@@ -286,7 +297,7 @@ def display_task(task, df, category_lookup, categories_df, level=0):
             
             # Add subtask button
             with cols[5]:
-                if st.button("+", key=f"add_subtask_{task_id}", help="Add subtask"):
+                if st.button("↳+", key=f"add_subtask_{task_id}", help="Add subtask"):
                     st.session_state[f"add_subtask_mode_{task_id}"] = True
                     st.session_state.needs_rerun = True
             
