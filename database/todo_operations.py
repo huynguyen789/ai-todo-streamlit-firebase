@@ -168,6 +168,18 @@ def update_todo(doc_id, task, status, score, category_id=None, parent_id=None, l
             'updated_at': now
         }
         
+        # Add completed_at timestamp when task is marked as complete
+        if status == 'completed':
+            # If task is being completed now, add completed_at timestamp
+            todo_doc = db.collection('todos').document(doc_id).get()
+            if todo_doc.exists:
+                todo_data = todo_doc.to_dict()
+                if todo_data.get('status') != 'completed':
+                    update_data['completed_at'] = now
+        elif status == 'pending':
+            # If task is being marked as pending, remove completed_at timestamp
+            update_data['completed_at'] = None
+        
         # Add category_id to update if provided
         if category_id is not None:
             update_data['category_id'] = category_id
@@ -195,29 +207,39 @@ def delete_todo(doc_id):
     """
     Input: document ID
     Process: Deletes todo from Firestore and its subtasks
-    Output: None
+    Output: Boolean indicating success or failure
     """
     try:
+        # Ensure doc_id is a string
+        doc_id = str(doc_id).strip()
+        
+        # Get Firestore database instance
         db = get_firestore_db()
         
-        # Find all subtasks of this task
-        todos_ref = db.collection('todos')
-        subtasks = todos_ref.where('parent_id', '==', doc_id).stream()
+        # Find and delete subtasks first
+        todos_collection = db.collection('todos')
         
-        # Delete all subtasks first
-        for subtask in subtasks:
-            subtask_ref = todos_ref.document(subtask.id)
-            subtask_ref.delete()
+        # Query for subtasks
+        subtasks_query = todos_collection.where('parent_id', '==', doc_id).stream()
+        subtask_ids = [subtask.id for subtask in subtasks_query]
         
-        # Delete the main task
-        todo_ref = todos_ref.document(doc_id)
-        todo_ref.delete()
+        # Delete each subtask
+        for subtask_id in subtask_ids:
+            todos_collection.document(subtask_id).delete()
+            
+        # Now delete the main task
+        todos_collection.document(doc_id).delete()
         
-        # Clear cache to refresh data
+        # Force cache clearing to refresh data
         st.cache_data.clear()
+        
+        return True
+        
     except Exception as e:
-        st.error(f"Error deleting todo: {str(e)}")
-        raise
+        st.error(f"Error deleting task: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
+        return False
 
 @retry_with_backoff(retries=3)
 def move_todo_up(doc_id, current_position, df):
@@ -335,4 +357,70 @@ def add_subtask(parent_id, task, score, category_id='work'):
             raise ValueError("Parent task not found")
     except Exception as e:
         st.error(f"Error adding subtask: {str(e)}")
-        raise 
+        raise
+
+def filter_tasks_by_timeframe(df, timeframe='all'):
+    """
+    Input: DataFrame with todos, timeframe option ('all', 'today', 'week', 'month', 'year')
+    Process: Filters tasks based on selected completion timeframe
+    Output: Filtered DataFrame
+    """
+    if timeframe == 'all' or df.empty:
+        return df
+    
+    # Create copy to avoid modifying original
+    filtered_df = df.copy()
+    
+    # Convert string timestamps to datetime objects where they exist
+    if 'completed_at' in filtered_df.columns:
+        filtered_df['completed_at'] = pd.to_datetime(filtered_df['completed_at'], errors='coerce')
+    else:
+        # If no completed_at column, return original DataFrame
+        return df
+    
+    # Get current datetime for comparison
+    now = pd.Timestamp.now()
+    
+    # Filter based on selected timeframe
+    if timeframe == 'today':
+        # Tasks completed today (same date)
+        return filtered_df[
+            (filtered_df['status'] == 'completed') & 
+            (filtered_df['completed_at'].dt.date == now.date()) | 
+            (filtered_df['status'] == 'pending')
+        ]
+    
+    elif timeframe == 'week':
+        # Tasks completed this week
+        # Get start of current week (Monday)
+        start_of_week = now - pd.Timedelta(days=now.dayofweek)
+        start_of_week = start_of_week.replace(hour=0, minute=0, second=0)
+        
+        return filtered_df[
+            (filtered_df['status'] == 'completed') & 
+            (filtered_df['completed_at'] >= start_of_week) | 
+            (filtered_df['status'] == 'pending')
+        ]
+    
+    elif timeframe == 'month':
+        # Tasks completed this month
+        start_of_month = now.replace(day=1, hour=0, minute=0, second=0)
+        
+        return filtered_df[
+            (filtered_df['status'] == 'completed') & 
+            (filtered_df['completed_at'] >= start_of_month) | 
+            (filtered_df['status'] == 'pending')
+        ]
+    
+    elif timeframe == 'year':
+        # Tasks completed this year
+        start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0)
+        
+        return filtered_df[
+            (filtered_df['status'] == 'completed') & 
+            (filtered_df['completed_at'] >= start_of_year) | 
+            (filtered_df['status'] == 'pending')
+        ]
+    
+    # Default case, return original DataFrame
+    return df 

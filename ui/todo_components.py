@@ -8,7 +8,11 @@ Logic:
 import streamlit as st
 import pandas as pd
 from database.category_ops import SCORE_OPTIONS, SCORE_COLORS
-from database.todo_operations import add_todo, update_todo, delete_todo, move_todo_up, move_todo_down, add_subtask
+from database.todo_operations import (
+    add_todo, update_todo, delete_todo, move_todo_up, 
+    move_todo_down, add_subtask, filter_tasks_by_timeframe
+)
+from database.firebase_init import get_firestore_db
 
 def display_add_todo_form(categories_df):
     """
@@ -21,7 +25,7 @@ def display_add_todo_form(categories_df):
         st.session_state.new_task_input = ""
     
     with st.form(key="add_form", clear_on_submit=True):
-        st.markdown("### Add New Task")
+        # st.markdown("### Add New Task")
         cols = st.columns([3, 1, 1, 1])
         
         # Task input
@@ -64,12 +68,24 @@ def display_add_todo_form(categories_df):
             # Set rerun flag to refresh the page
             st.session_state.needs_rerun = True
 
-def display_todo_list(df, categories_df, show_completed=True):
+def display_todo_list(df, categories_df, show_completed=True, completion_timeframe='all'):
     """
-    Input: DataFrame with todos, DataFrame with categories, boolean for showing completed tasks
+    Input: DataFrame with todos, DataFrame with categories, boolean for showing completed tasks,
+           string for completion timeframe (all, today, week, month, year)
     Process: Renders todo list with tasks and subtasks
     Output: None
     """
+    # Show success message for task deletion if applicable
+    if st.session_state.get('last_deleted_task'):
+        # st.success(f"Task '{st.session_state.last_deleted_task}' deleted successfully!")
+        # Clear the deletion message after showing it
+        del st.session_state.last_deleted_task
+    
+    # Clean up any task_deleted flags that might be lingering
+    for key in list(st.session_state.keys()):
+        if key.startswith('task_deleted_'):
+            del st.session_state[key]
+    
     if df.empty:
         st.info("No tasks yet. Add a task to get started!")
         return
@@ -80,22 +96,46 @@ def display_todo_list(df, categories_df, show_completed=True):
         category_lookup = {row['id']: {'name': row['name'], 'color': row['color']} 
                           for _, row in categories_df.iterrows()}
     
+    # Create a copy of the original dataframe for filtering
+    filtered_df = df.copy()
+    
     # Filter by selected category if not 'all'
     if st.session_state.selected_category != 'all':
-        df = df[df['category_id'] == st.session_state.selected_category]
+        filtered_df = filtered_df[filtered_df['category_id'] == st.session_state.selected_category]
+    
+    # Apply timeframe filtering to completed tasks
+    filtered_df = filter_tasks_by_timeframe(filtered_df, completion_timeframe)
     
     # Filter out completed tasks if show_completed is False
     if not show_completed:
-        df = df[df['status'] != 'completed']
+        filtered_df = filtered_df[filtered_df['status'] != 'completed']
     
-    if df.empty:
-        st.info("No tasks match your current filters.")
+    if filtered_df.empty:
+        message = "No tasks match your current filters."
+        if completion_timeframe != 'all':
+            timeframe_text = {
+                'today': 'today',
+                'week': 'this week',
+                'month': 'this month',
+                'year': 'this year'
+            }.get(completion_timeframe, '')
+            
+            if timeframe_text:
+                message = f"No completed tasks {timeframe_text}."
+                
+        st.info(message)
         return
     
-    # Get main tasks (level 0)
-    main_tasks = df[df['level'] == 0].sort_values('position')
+    # Get main tasks (level 0) and sort them: pending first, then completed
+    main_tasks = filtered_df[filtered_df['level'] == 0].copy()
     
-    # Display each main task with its subtasks
+    # Add a sorting column: 0 for pending tasks, 1 for completed tasks
+    main_tasks['sort_order'] = main_tasks['status'].apply(lambda x: 1 if x == 'completed' else 0)
+    
+    # Sort by sort_order first (pending before completed), then by position
+    main_tasks = main_tasks.sort_values(['sort_order', 'position'])
+    
+    # Display each main task with its subtasks - pass the original df for operations
     for _, task in main_tasks.iterrows():
         display_task(task, df, category_lookup, categories_df)
 
@@ -105,7 +145,8 @@ def display_task(task, df, category_lookup, categories_df, level=0):
     Process: Renders a task with its subtasks in a compact single-line format
     Output: None
     """
-    task_id = task['id']
+    # Ensure we're working with the original task ID as a string
+    task_id = str(task['id'])
     task_text = task['task']
     status = task['status']
     score = task['score']
@@ -251,9 +292,27 @@ def display_task(task, df, category_lookup, categories_df, level=0):
             
             # Delete button
             with cols[6]:
-                if st.button("🗑", key=f"delete_{task_id}", help="Delete task"):
-                    delete_todo(task_id)
-                    st.session_state.needs_rerun = True
+                # Check if this task was just deleted and prevent showing the button 
+                # if we're in the middle of a rerun from a deletion
+                if not st.session_state.get(f"task_deleted_{task_id}", False):
+                    if st.button("🗑", key=f"delete_{task_id}", help="Delete task"):
+                        # Use the delete_todo function to handle deletion
+                        success = delete_todo(task_id)
+                        
+                        if success:
+                            # Mark as deleted
+                            st.session_state[f"task_deleted_{task_id}"] = True
+                            # Force cache clearing to refresh data
+                            st.cache_data.clear()
+                            # Set the rerun flag to refresh UI once
+                            st.session_state.needs_rerun = True
+                            # Add a success message that will be shown after rerun
+                            st.session_state.last_deleted_task = task_text[:20] + "..." if len(task_text) > 20 else task_text
+                        else:
+                            st.error(f"Failed to delete task. Please try again.")
+                else:
+                    # Show a placeholder where the button would be
+                    st.markdown("", unsafe_allow_html=True)
             
             # Move up button
             with cols[7]:
@@ -268,6 +327,15 @@ def display_task(task, df, category_lookup, categories_df, level=0):
                     st.session_state.needs_rerun = True
     
     # Display subtasks
-    subtasks = df[(df['parent_id'] == task_id) & (df['level'] > 0)].sort_values('position')
-    for _, subtask in subtasks.iterrows():
-        display_task(subtask, df, category_lookup, categories_df, level=level+1) 
+    # Filter subtasks from the original df to ensure IDs are preserved
+    subtasks_df = df[(df['parent_id'] == task_id) & (df['level'] > 0)].copy()
+    
+    if not subtasks_df.empty:
+        # Add a sorting column: 0 for pending tasks, 1 for completed tasks
+        subtasks_df['sort_order'] = subtasks_df['status'].apply(lambda x: 1 if x == 'completed' else 0)
+        
+        # Sort by sort_order first (pending before completed), then by position
+        subtasks_df = subtasks_df.sort_values(['sort_order', 'position'])
+        
+        for _, subtask in subtasks_df.iterrows():
+            display_task(subtask, df, category_lookup, categories_df, level=level+1) 
