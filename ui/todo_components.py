@@ -328,14 +328,24 @@ def display_task(task, df, category_lookup, categories_df, level=0):
             # Move up button
             with cols[7]:
                 if st.button("↑", key=f"up_{task_id}", help="Move up"):
-                    move_todo_up(task_id, position, df)
-                    st.session_state.needs_rerun = True
+                    # Ensure position is an integer
+                    try:
+                        position_int = int(position)
+                        move_todo_up(task_id, position_int, df)
+                        st.session_state.needs_rerun = True
+                    except Exception as e:
+                        st.error(f"Error moving task: {str(e)}")
             
             # Move down button
             with cols[8]:
                 if st.button("↓", key=f"down_{task_id}", help="Move down"):
-                    move_todo_down(task_id, position, df)
-                    st.session_state.needs_rerun = True
+                    # Ensure position is an integer
+                    try:
+                        position_int = int(position)
+                        move_todo_down(task_id, position_int, df)
+                        st.session_state.needs_rerun = True
+                    except Exception as e:
+                        st.error(f"Error moving task: {str(e)}")
     
     # Display subtasks
     # Filter subtasks from the original df to ensure IDs are preserved
